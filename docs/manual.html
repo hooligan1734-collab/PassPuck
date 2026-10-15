@@ -165,7 +165,7 @@ footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--line);font-si
 <body>
 <div class="wrap">
 <header>
-  <div class="eyebrow">Инструкция по сборке, прошивке и работе · PassPuck 2.0</div>
+  <div class="eyebrow">Инструкция по сборке, прошивке и работе · PassPuck 2.1</div>
   <h1>PassPuck</h1>
   <p class="lead">Карманный менеджер паролей. Компьютер видит его как обычную USB-клавиатуру: выберите профиль кнопками, нажмите «Ввод», и устройство само наберёт пароль. Ещё PassPuck может не давать компьютеру уснуть и блокирует его сочетанием кнопок.</p>
   <ul class="specs">
@@ -518,7 +518,9 @@ footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--line);font-si
 <div class="tree">CIRCUITPY/
 ├── lib/                   <span class="c"># библиотеки, папка целиком</span>
 ├── fonts/                 <span class="c"># шрифт с русскими буквами</span>
-├── code.py                <span class="c"># программа</span>
+├── code.py                <span class="c"># запуск программы (не менять)</span>
+├── passpuck.mpy           <span class="c"># сама программа, собранная заранее</span>
+├── settings.py            <span class="c"># настройки, можно менять Блокнотом</span>
 ├── passwords.py           <span class="c"># пароли и названия профилей</span>
 ├── PassPuck Editor.html   <span class="c"># редактор паролей</span>
 └── boot.py<span class="tag last">последним</span>
@@ -529,7 +531,12 @@ footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--line);font-si
     <b class="t">Почему boot.py последним</b>
     <p><code>boot.py</code> прячет диск CIRCUITPY при каждом включении. Если скопировать его раньше остальных файлов и плата перезагрузится, диск пропадёт. Тогда откройте его кнопкой «Назад» (<a href="#edit">раздел 13</a>) и докопируйте файлы.</p>
   </div>
-  <p>При обновлении уже работающего устройства копируйте всё, <b>кроме <code>passwords.py</code></b>, чтобы не затереть свои пароли.</p>
+  <h3>Обновление уже работающего устройства</h3>
+  <p>Откройте диск (<a href="#edit">раздел 13</a>) и скопируйте всё из <code>2_на_устройство</code>, <b>кроме <code>passwords.py</code> и <code>settings.py</code></b>: в них ваши пароли и настройки. Если на устройстве лежит <code>hardware_pins.py</code>, не удаляйте его. <code>boot.py</code> — последним.</p>
+  <div class="note warn">
+    <b class="t">Версия CircuitPython</b>
+    <p>Программа <code>passpuck.mpy</code> собрана для <b>CircuitPython 10</b> — прошивка из комплекта как раз такая. На CircuitPython 11 и новее она не запустится: светодиод будет мигать красным «два коротких — пауза». Тогда прошейте плату файлом из комплекта.</p>
+  </div>
 </section>
 
 <section id="first">
@@ -648,11 +655,11 @@ MANUAL_PASSWORDS = {
       <h4>Меню SETTINGS</h4>
       <ul>
         <li><b>Sleep:</b> через сколько засыпать: 15s / 30s / 1m / 2m / 5m / Never</li>
-        <li><b>Style:</b> сон — Off (экран выключается), Stars, Bounce или Rain (анимации)</li>
+        <li><b>Style:</b> что во сне — Off (экран выключается) или анимация: Stars, Bounce, Rain, Eyes, Fireworks, Snake, Matrix, Pulse, Warp, Snow, Lock. <b>Mix</b> — анимации сменяют друг друга каждые 2 минуты</li>
+        <li><b>Preview:</b> уснуть прямо сейчас, чтобы посмотреть выбранный стиль. Любая кнопка вернёт на эту же строку</li>
         <li><b>Screen:</b> яркость экрана Low / Mid / High</li>
         <li><b>LED:</b> светодиод Off / Low / High</li>
         <li><b>Layout:</b> Auto — устройство само переключает раскладку, Off — не трогает её (<a href="#windows">раздел 10</a>)</li>
-        <li><b>Preview:</b> уснуть прямо сейчас, чтобы посмотреть стиль сна</li>
         <li><b>Edit mode / Exit edit mode:</b> перезапуск с открытым или скрытым диском (<a href="#edit">раздел 13</a>)</li>
         <li><b>Exit</b></li>
       </ul>
@@ -698,7 +705,7 @@ MANUAL_PASSWORDS = {
 
 <section id="tuning">
   <h2><span class="n">14</span>Тонкая настройка</h2>
-  <p>Почти всё настраивается из меню. Остальное — в начале файла <code>code.py</code>, раздел «НАСТРОЙКИ», каждая строка там подписана по-русски.</p>
+  <p>Почти всё настраивается из меню. Остальное — в файле <code>settings.py</code> на диске устройства: каждая строка там подписана по-русски, менять можно Блокнотом. Если удалить строку, будет значение по умолчанию. При обновлении программы этот файл не заменяется.</p>
   <div class="tbl-wrap"><table>
     <thead><tr><th>Настройка</th><th>Что меняет</th></tr></thead>
     <tbody>
@@ -707,17 +714,20 @@ MANUAL_PASSWORDS = {
       <tr><td><code>TYPING_DELAY</code>, <code>TYPING_START_DELAY</code></td><td>Пауза между символами и пауза после Ctrl first</td></tr>
       <tr><td><code>LANG_EN_HOTKEY</code>, <code>LANG_RU_HOTKEY</code>, <code>LANG_SWITCH_DELAY</code></td><td>Сочетания переключения раскладки и пауза после него</td></tr>
       <tr><td><code>SLEEP_PRESETS</code>, <code>JIGGLE_PRESETS</code></td><td>Варианты времени сна и интервалов Jiggle в меню</td></tr>
+      <tr><td><code>MIX_PERIOD</code>, <code>ANIMATION_FRAME_TIME</code></td><td>Сколько секунд показывать каждую анимацию в Mix и скорость анимаций</td></tr>
       <tr><td><code>SPLASH_TIME</code></td><td>Сколько секунд показывать заставку, 0 — не показывать</td></tr>
       <tr><td><code>I2C_FREQUENCY</code></td><td>Скорость связи с экраном. Если на экране помехи — <code>100000</code></td></tr>
     </tbody>
   </table></div>
   <h3>Если кнопки припаяны не к тем контактам</h3>
-  <p>Перепаивать не обязательно. Положите на устройство рядом с <code>code.py</code> файл <code>hardware_pins.py</code> только с теми кнопками, которые нужно поменять. Например, если перепутаны «Ввод» и «Вперёд»:</p>
+  <p>Перепаивать не обязательно. Положите на устройство рядом с <code>settings.py</code> файл <code>hardware_pins.py</code> только с теми кнопками, которые нужно поменять. Например, если перепутаны «Ввод» и «Вперёд»:</p>
 <pre><code>import board
 
 PIN_ENTER = board.GP8
 PIN_FWD = board.GP7</code></pre>
-  <p>Этот файл относится только к конкретному устройству: на другие его не копируйте. Сам <code>code.py</code> менять не нужно. Кнопку «Назад» так переназначать не стоит: её контакт GP6 прописан ещё и в <code>boot.py</code>.</p>
+  <p>Этот файл относится только к конкретному устройству: на другие его не копируйте. Кнопку «Назад» так переназначать не стоит: её контакт GP6 прописан ещё и в <code>boot.py</code>.</p>
+  <h3>Если хочется поменять саму программу</h3>
+  <p>Исходный код — файл <code>src/passpuck.py</code> в репозитории проекта на GitHub. После правки соберите <code>passpuck.mpy</code> командой <code>tools\build.ps1</code> (она сама скачает нужную утилиту Adafruit) и скопируйте его на устройство.</p>
 </section>
 
 <section id="trouble">
@@ -729,8 +739,9 @@ PIN_FWD = board.GP7</code></pre>
       <tr><td>При зажатой BOOT не появляется диск RPI-RP2</td><td>Кабель «только для зарядки» или плохой порт. Возьмите другой кабель, подключите без хаба.</td></tr>
       <tr><td>Плата не определяется, греется</td><td>Короткое замыкание по питанию. Сразу отключите и прозвоните 3V3–GND (<a href="#solder">раздел 7</a>).</td></tr>
       <tr><td>Светодиод синий, экран чёрный</td><td>Перепутаны SDA и SCL, плохая пайка или нет питания экрана (<a href="#table">раздел 3</a>).</td></tr>
-      <tr><td>На экране мусор или картинка сдвинута</td><td>Не тот <code>OLED_TYPE</code> или помехи на шине: <code>I2C_FREQUENCY = 100000</code>.</td></tr>
+      <tr><td>На экране мусор или картинка сдвинута</td><td>Не тот <code>OLED_TYPE</code> или помехи на шине: в <code>settings.py</code> поставьте <code>I2C_FREQUENCY = 100000</code>.</td></tr>
       <tr><td><code>!!! ERROR !!!</code> и красное мигание</td><td>Ошибка программы. Подробности в <code>log.txt</code>. Любая кнопка перезапустит устройство.</td></tr>
+      <tr><td>Экран не включается, светодиод мигает красным «два коротких — пауза»</td><td>Не загрузился <code>passpuck.mpy</code>: другая версия CircuitPython или файл не скопирован. Прошейте плату из комплекта и скопируйте файлы заново (<a href="#flash">раздел 8</a>). Причина записана в <code>log.txt</code>.</td></tr>
       <tr><td><code>passwords.py ERROR</code> или <code>Backup loaded</code></td><td>Файл паролей испорчен. Перепишите его редактором (<a href="#config">раздел 11</a>).</td></tr>
       <tr><td>Профили листаются сами или при каждом подключении появляется диск</td><td>Кнопка «нажата» всегда: провода на ножках одной пары (<a href="#buttons">раздел 5</a>) или замыкание на GND.</td></tr>
       <tr><td>Кнопки делают не то («Ввод» листает)</td><td>Кнопки припаяны к другим контактам. Используйте <code>hardware_pins.py</code> (<a href="#tuning">раздел 14</a>).</td></tr>
@@ -756,7 +767,7 @@ PIN_FWD = board.GP7</code></pre>
   </ul>
 </section>
 
-<footer>PassPuck 2.0 · Waveshare RP2040-Zero · CircuitPython 10.2.1 · OLED SH1106 1.3″ I2C, адрес 0x3C · шрифт Terminus (SIL OFL 1.1)</footer>
+<footer>PassPuck 2.1 · Waveshare RP2040-Zero · CircuitPython 10.2.1 · OLED SH1106 1.3″ I2C, адрес 0x3C · шрифт Terminus (SIL OFL 1.1)</footer>
 </div>
 
 </body>

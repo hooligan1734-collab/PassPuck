@@ -15,6 +15,9 @@ System Volume Information/
 .DS_Store
 Thumbs.db
 
+# Скачанные инструменты сборки
+tools/.cache/
+
 # Личные файлы конкретного устройства
 hardware_pins.py
 !examples/hardware_pins.py
