@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PassPuck Editor</title>
+<style>
+/* Локальный редактор: работает без интернета, ничего никуда не отправляет. */
+:root{
+  --bg:#F3F5F7; --surface:#FFFFFF; --fg:#16202A; --muted:#5A6672; --line:#D8DEE4;
+  --accent:#1C5BA8; --accent-fg:#FFFFFF; --accent-soft:#E2EBF7; --field:#FFFFFF;
+  --ok-bg:#E5F3EA; --ok-fg:#1C6236; --warn-bg:#FFF3DC; --warn-fg:#6E4500; --bad-bg:#FCE9E9; --bad-fg:#8A1C1C;
+  --ru:#7B4ED8; --ru-bg:#EFE8FC;
+  --body:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif; --mono:Consolas,"Cascadia Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0F1419; --surface:#161C23; --fg:#E6EAEE; --muted:#9AA6B2; --line:#2A333D;
+  --accent:#74AEFF; --accent-fg:#0F1419; --accent-soft:#1A2A40; --field:#0F1419;
+  --ok-bg:#13261B; --ok-fg:#9ED9B2; --warn-bg:#2E2410; --warn-fg:#F3CF8A; --bad-bg:#2E1517; --bad-fg:#F4A9A9;
+  --ru:#AD90FF; --ru-bg:#241B3A; color-scheme:dark;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:1000px;margin:0 auto;padding:28px 20px 60px}
+h1{font-size:26px;margin:0}
+.sub{color:var(--muted);margin:4px 0 20px}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px}
+button{font:inherit;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:8px;padding:7px 14px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600}
+button:disabled{opacity:.45;cursor:not-allowed}
+.note{border-radius:10px;padding:10px 14px;margin:10px 0;font-size:14px}
+.note.ok{background:var(--ok-bg);color:var(--ok-fg)}
+.note.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.note.bad{background:var(--bad-bg);color:var(--bad-fg)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:820px}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+tr:last-child td{border-bottom:0}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+td.num{font-family:var(--mono);font-weight:700;font-size:16px;width:40px}
+.type{font-size:12px;color:var(--muted)}
+input[type=text],input[type=password],input[type=number],select{font:inherit;border:1px solid var(--line);border-radius:8px;padding:6px 9px;background:var(--field);color:var(--fg)}
+input.name{width:100%}
+.pw{display:flex;gap:6px}
+.pw input{flex:1;min-width:0;font-family:var(--mono)}
+.pw button{padding:6px 10px}
+.gen{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.gen select{padding:6px}
+.gen input{width:64px}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.chip{font-size:12px;border-radius:999px;padding:1px 8px;background:var(--accent-soft);color:var(--accent)}
+.chip.ru{background:var(--ru-bg);color:var(--ru)}
+.chip.bad{background:var(--bad-bg);color:var(--bad-fg)}
+.chip.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.hint{font-size:12px;color:var(--muted);margin-top:4px}
+.dirty{font-size:13px;color:var(--warn-fg)}
+footer{margin-top:22px;font-size:13px;color:var(--muted)}
+footer li{margin:3px 0}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>PassPuck Editor</h1>
+  <p class="sub">Пароли и названия профилей устройства. Работает без интернета, данные никуда не отправляются.</p>
+
+  <div class="bar">
+    <button id="openBtn" class="primary">Открыть устройство (диск CIRCUITPY)</button>
+    <button id="saveBtn" disabled>Сохранить на устройство</button>
+    <span id="dirty" class="dirty" hidden>Есть несохранённые изменения</span>
+  </div>
+
+  <div id="msg"></div>
+
+  <div id="editor" hidden>
+    <div class="card">
+      <table>
+        <thead><tr><th>№</th><th style="width:24%">Название на экране</th><th style="width:38%">Пароль</th><th>Сгенерировать</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>
+    <ul>
+      <li>Этот редактор лежит прямо на устройстве. Откройте диск: на устройстве SETTINGS → Edit mode (или подключите его с зажатой кнопкой «Назад»), затем дважды кликните PassPuck Editor.html на диске CIRCUITPY.</li>
+      <li>В окне выбора папки выберите сам диск CIRCUITPY и разрешите браузеру изменять файлы.</li>
+      <li>Нужен браузер Microsoft Edge или Google Chrome: только они умеют сохранять прямо на диск.</li>
+      <li>Можно: латиница, цифры, символы английской клавиатуры, русские буквы. Для русских букв в Windows должны быть настроены Ctrl+Shift+1 (английский) и Ctrl+Shift+2 (русский).</li>
+      <li>После сохранения <b>подождите 10 секунд</b>, прежде чем отключать устройство (или SETTINGS → Exit edit mode после паузы).</li>
+      <li>Перед сохранением прежняя версия файла копируется в passwords.bak.</li>
+    </ul>
+  </footer>
+</div>
+
+<script>
+"use strict";
+const PROFILES = [1, 2, 3, 4, 5, 6];
+const DEFAULT_NAMES = {1:"Work gen",2:"Work Laptop",3:"Crypto Vault",4:"Work fix",5:"Admin Access",6:"Extra Fix"};
+const EN_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=";
+const RU_LOWER = "йцукенгшщзхъфывапролджэячсмитьбю";
+const RU_UPPER = "ЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ";
+const RU_SET = new Set((RU_LOWER + RU_UPPER + "ёЁ№").split(""));
+const RU_GEN_CHARS = RU_LOWER + RU_UPPER + "0123456789";
+const NAME_MAX = 20;
+
+let dirHandle = null;
+let data = null;          // {names:{}, passwords:{}}
+let savedSnapshot = "";
+
+const $ = (id) => document.getElementById(id);
+
+function showMsg(kind, html) {
+  $("msg").innerHTML = html ? `<div class="note ${kind}">${html}</div>` : "";
+}
+
+function charKind(c) {
+  const code = c.codePointAt(0);
+  if (code >= 32 && code <= 126) return "en";
+  if (RU_SET.has(c)) return "ru";
+  return null;
+}
+
+function analyze(text) {
+  let en = false, ru = false;
+  const bad = new Set();
+  for (const c of text) {
+    const k = charKind(c);
+    if (k === "en") en = true; else if (k === "ru") ru = true; else bad.add(c);
+  }
+  return {en, ru, bad: [...bad]};
+}
+
+function unescapePy(s) { return s.replace(/\\(.)/g, "$1"); }
+function escapePy(s) { return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"'); }
+
+function parseDict(text, name) {
+  // Ищем «NAME = {» и читаем записи «номер: "строка",» по очереди до закрывающей «}».
+  // Скобка «}» внутри пароля не мешает: строки разбираются целиком.
+  const head = new RegExp("^[ \\t]*" + name + "\\s*=\\s*\\{", "m").exec(text);
+  if (!head) return null;
+  const entry = /\s*(\d+)\s*:\s*(?:"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)')\s*,?/y;
+  const close = /\s*\}/y;
+  const comment = /\s*#[^\n]*/y;
+  const out = {};
+  let pos = head.index + head[0].length;
+  for (;;) {
+    comment.lastIndex = pos;
+    if (comment.exec(text)) { pos = comment.lastIndex; continue; }  // пропускаем комментарии
+    entry.lastIndex = pos;
+    const m = entry.exec(text);
+    if (m) { out[+m[1]] = unescapePy(m[2] ?? m[3]); pos = entry.lastIndex; continue; }
+    close.lastIndex = pos;
+    if (close.exec(text)) return out;
+    throw new Error("не разобрать запись в " + name);
+  }
+}
+
+function parseFile(text) {
+  const auto = parseDict(text, "AUTO_PASSWORDS");
+  const manual = parseDict(text, "MANUAL_PASSWORDS");
+  if (!auto || !manual) throw new Error("в файле нет AUTO_PASSWORDS или MANUAL_PASSWORDS");
+  const names = parseDict(text, "PROFILE_NAMES") || {};
+  const res = {names: {}, passwords: {}};
+  for (const n of PROFILES) {
+    res.names[n] = names[n] ?? DEFAULT_NAMES[n];
+    res.passwords[n] = (n <= 3 ? auto[n] : manual[n]) ?? "";
+  }
+  return res;
+}
+
+function buildFile(d) {
+  const L = [
+    "# ================= Пароли PassPuck =================",
+    "# Удобнее всего менять этот файл через PassPuck Editor.html.",
+    "#",
+    "# PROFILE_NAMES — названия профилей на экране (можно по-русски, до 20 символов).",
+    "# Профили 1-3: пароль можно сгенерировать на устройстве (меню -> Gen Pass).",
+    "# Профили 4-6: пароль задаётся только здесь.",
+    "#",
+    "# Как менять вручную:",
+    "#  - меняйте только текст внутри кавычек;",
+    "#  - можно латиницу, цифры, символы с английской клавиатуры и русские буквы;",
+    "#  - для русских букв в Windows должны быть настроены сочетания",
+    "#    Ctrl+Shift+1 (английский) и Ctrl+Shift+2 (русский), см. инструкцию;",
+    '#  - символы " и \\ пишите как \\" и \\\\ ;',
+    "#  - после сохранения подождите 10 секунд, прежде чем отключать устройство.",
+    "# ====================================================",
+    "",
+    "PROFILE_NAMES = {",
+  ];
+  for (const n of PROFILES) L.push(`    ${n}: "${escapePy(d.names[n])}",`);
+  L.push("}", "", "AUTO_PASSWORDS = {");
+  for (const n of [1, 2, 3]) L.push(`    ${n}: "${escapePy(d.passwords[n])}",`);
+  L.push("}", "", "MANUAL_PASSWORDS = {");
+  for (const n of [4, 5, 6]) L.push(`    ${n}: "${escapePy(d.passwords[n])}",`);
+  L.push("}", "");
+  return L.join("\n");
+}
+
+function randomFrom(chars, length) {
+  const arr = [...chars];
+  const limit = 256 - (256 % arr.length);
+  const out = [];
+  while (out.length < length) {
+    for (const b of crypto.getRandomValues(new Uint8Array(32))) {
+      if (b < limit && out.length < length) out.push(arr[b % arr.length]);
+    }
+  }
+  return out.join("");
+}
+
+function chipsFor(text, isName) {
+  const a = analyze(text);
+  const c = [];
+  if (!text) c.push(`<span class="chip warn">${isName ? "пусто" : "пароля нет"}</span>`);
+  if (a.bad.length) c.push(`<span class="chip bad">нельзя: ${a.bad.map(x => x === " " ? "пробел" : x).join(" ")}</span>`);
+  if (!isName && text) {
+    if (a.ru && a.en) c.push(`<span class="chip ru">смешанный (раскладка переключается)</span>`);
+    else if (a.ru) c.push(`<span class="chip ru">русский</span>`);
+    else c.push(`<span class="chip">латиница</span>`);
+    c.push(`<span class="chip">${[...text].length} симв.</span>`);
+  }
+  if (isName && [...text].length > NAME_MAX) c.push(`<span class="chip warn">длиннее ${NAME_MAX} — обрежется на экране</span>`);
+  return c.join("");
+}
+
+function hasErrors() {
+  return PROFILES.some(n => analyze(data.passwords[n]).bad.length || analyze(data.names[n]).bad.length);
+}
+
+function refreshState() {
+  const dirty = buildFile(data) !== savedSnapshot;
+  $("dirty").hidden = !dirty;
+  $("saveBtn").disabled = !dirty || hasErrors();
+  for (const n of PROFILES) {
+    $("pwchips" + n).innerHTML = chipsFor(data.passwords[n], false);
+    $("namechips" + n).innerHTML = chipsFor(data.names[n], true);
+  }
+}
+
+function render() {
+  const rows = PROFILES.map(n => `
+    <tr>
+      <td class="num">${n}<div class="type">${n <= 3 ? "авто" : "фикс."}</div></td>
+      <td><input class="name" type="text" id="name${n}" maxlength="40" aria-label="Название профиля ${n}">
+          <div class="chips" id="namechips${n}"></div></td>
+      <td><div class="pw"><input type="password" id="pw${n}" autocomplete="off" spellcheck="false" aria-label="Пароль профиля ${n}">
+          <button type="button" id="eye${n}" aria-label="Показать пароль">👁</button></div>
+          <div class="chips" id="pwchips${n}"></div></td>
+      <td><div class="gen">
+          <select id="lang${n}" aria-label="Алфавит"><option value="en">EN</option><option value="ru">RU</option></select>
+          <input type="number" id="len${n}" min="4" max="64" value="12" aria-label="Длина">
+          <button type="button" id="gen${n}">Создать</button></div>
+          <div class="hint">EN: буквы, цифры, символы. RU: русские буквы и цифры.</div></td>
+    </tr>`).join("");
+  $("rows").innerHTML = rows;
+  for (const n of PROFILES) {
+    $("name" + n).value = data.names[n];
+    $("pw" + n).value = data.passwords[n];
+    $("name" + n).addEventListener("input", e => { data.names[n] = e.target.value; refreshState(); });
+    $("pw" + n).addEventListener("input", e => { data.passwords[n] = e.target.value; refreshState(); });
+    $("eye" + n).addEventListener("click", () => {
+      const f = $("pw" + n); f.type = f.type === "password" ? "text" : "password";
+    });
+    $("gen" + n).addEventListener("click", () => {
+      const len = Math.max(4, Math.min(64, parseInt($("len" + n).value, 10) || 12));
+      const chars = $("lang" + n).value === "ru" ? RU_GEN_CHARS : EN_CHARS;
+      data.passwords[n] = randomFrom(chars, len);
+      $("pw" + n).value = data.passwords[n];
+      $("pw" + n).type = "text";
+      refreshState();
+    });
+  }
+  $("editor").hidden = false;
+  refreshState();
+}
+
+async function readText(handle, name) {
+  const fh = await handle.getFileHandle(name);
+  return await (await fh.getFile()).text();
+}
+
+async function writeText(handle, name, text) {
+  const fh = await handle.getFileHandle(name, {create: true});
+  const w = await fh.createWritable();
+  await w.write(text);
+  await w.close();
+}
+
+$("openBtn").addEventListener("click", async () => {
+  if (!window.showDirectoryPicker) {
+    showMsg("bad", "Этот браузер не умеет сохранять на диск. Откройте файл в <b>Microsoft Edge</b> или <b>Google Chrome</b>.");
+    return;
+  }
+  try {
+    const h = await window.showDirectoryPicker({mode: "readwrite"});
+    try { await h.getFileHandle("code.py"); }
+    catch { showMsg("bad", "В выбранной папке нет code.py. Выберите сам диск <b>CIRCUITPY</b>."); return; }
+    let text;
+    try { text = await readText(h, "passwords.py"); }
+    catch { showMsg("bad", "На устройстве нет passwords.py."); return; }
+    try { data = parseFile(text); }
+    catch (e) {
+      showMsg("bad", "Не удалось прочитать passwords.py (" + e.message + "). Файл повреждён: можно заполнить профили заново и сохранить.");
+      data = {names: {...DEFAULT_NAMES}, passwords: {1:"",2:"",3:"",4:"",5:"",6:""}};
+      dirHandle = h; savedSnapshot = ""; render(); return;
+    }
+    dirHandle = h;
+    savedSnapshot = buildFile(data);
+    showMsg("ok", "Устройство открыто. Меняйте названия и пароли, затем нажмите «Сохранить на устройство».");
+    render();
+  } catch (e) {
+    if (e.name !== "AbortError") showMsg("bad", "Не удалось открыть: " + e.message);
+  }
+});
+
+$("saveBtn").addEventListener("click", async () => {
+  if (!dirHandle || hasErrors()) return;
+  const text = buildFile(data);
+  try {
+    try { await writeText(dirHandle, "passwords.bak", await readText(dirHandle, "passwords.py")); } catch {}
+    await writeText(dirHandle, "passwords.py", text);
+    const check = await readText(dirHandle, "passwords.py");
+    if (check !== text) throw new Error("проверка после записи не совпала");
+    savedSnapshot = text;
+    refreshState();
+    showMsg("ok", "Сохранено и проверено. <b>Подождите 10 секунд</b>, прежде чем отключать устройство или выбирать на нём Exit edit mode.");
+  } catch (e) {
+    showMsg("bad", "Не удалось сохранить: " + e.message + ". Устройство открыто в режиме редактирования? Попробуйте ещё раз.");
+  }
+});
+
+window.addEventListener("beforeunload", e => {
+  if (data && buildFile(data) !== savedSnapshot) { e.preventDefault(); e.returnValue = ""; }
+});
+</script>
+</body>
+</html>

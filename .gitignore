@@ -1,0 +1,20 @@
+# Файлы, которые устройство создаёт само (могут содержать старые пароли или журнал)
+passwords.bak
+passwords.tmp
+log.txt
+log_old.txt
+boot_out.txt
+settings.toml
+
+# Служебные файлы флешки и систем
+.fseventsd/
+.Trashes
+.Trash-*/
+.metadata_never_index
+System Volume Information/
+.DS_Store
+Thumbs.db
+
+# Личные файлы конкретного устройства
+hardware_pins.py
+!examples/hardware_pins.py

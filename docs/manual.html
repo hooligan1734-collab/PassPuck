@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PassPuck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Unbounded:wght@500;700&display=swap">
+<style>
+/* Layout: одна колонка ~900px, как техпаспорт; схемы во всю ширину в рамках, цвета проводов — сквозная легенда */
+:root{
+  --bg:#F3F5F7; --surface:#FFFFFF; --fg:#16202A; --muted:#5A6672; --line:#D8DEE4;
+  --accent:#1C5BA8; --accent-soft:#E2EBF7; --code-bg:#EBEFF3;
+  --zero:#1F242B; --zero-edge:#0E1114; --zero-fg:#F2F4F6; --zero-muted:#8D97A1; --copper:#C9973F; --chip:#323A44;
+  --oled:#1D4F98; --oled-edge:#123A73; --oled-fg:#FFFFFF; --glass:#0A0D12; --header:#111418; --pinmetal:#D4AF37; --flex:#C98A2B;
+  --btnbody:#2B2F35; --btncap:#646C76; --sym:#16202A;
+  --w-pwr:#D3263A; --w-gnd:#39424B; --w-sda:#1E6FD9; --w-scl:#D88A00; --w-btn:#7B4ED8;
+  --warn-bg:#FFF3DC; --warn-fg:#6E4500; --warn-line:#EFC57A;
+  --bad-bg:#FCE9E9; --bad-fg:#8A1C1C; --bad-line:#EBA5A5;
+  --ok-bg:#E5F3EA; --ok-fg:#1C6236; --ok-line:#9FD1B1;
+  --display:"Unbounded","Golos Text",system-ui,sans-serif;
+  --body:"Golos Text",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0F1419; --surface:#161C23; --fg:#E6EAEE; --muted:#9AA6B2; --line:#2A333D;
+  --accent:#74AEFF; --accent-soft:#1A2A40; --code-bg:#1E262F;
+  --zero:#262D36; --zero-edge:#46515D; --zero-fg:#F2F4F6; --zero-muted:#8D97A1; --copper:#D6A54E; --chip:#3A434E;
+  --oled:#2257A8; --oled-edge:#4A7CC8; --glass:#05070A; --header:#000000;
+  --btnbody:#323840; --btncap:#737C86; --sym:#E6EAEE;
+  --w-pwr:#FF5D6C; --w-gnd:#AEB8C3; --w-sda:#5DA2FF; --w-scl:#F5B342; --w-btn:#AD90FF;
+  --warn-bg:#2E2410; --warn-fg:#F3CF8A; --warn-line:#5E4A1F;
+  --bad-bg:#2E1517; --bad-fg:#F4A9A9; --bad-line:#5C2A2D;
+  --ok-bg:#13261B; --ok-fg:#9ED9B2; --ok-line:#2B4F39;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0F1419; --surface:#161C23; --fg:#E6EAEE; --muted:#9AA6B2; --line:#2A333D;
+  --accent:#74AEFF; --accent-soft:#1A2A40; --code-bg:#1E262F;
+  --zero:#262D36; --zero-edge:#46515D; --zero-fg:#F2F4F6; --zero-muted:#8D97A1; --copper:#D6A54E; --chip:#3A434E;
+  --oled:#2257A8; --oled-edge:#4A7CC8; --glass:#05070A; --header:#000000;
+  --btnbody:#323840; --btncap:#737C86; --sym:#E6EAEE;
+  --w-pwr:#FF5D6C; --w-gnd:#AEB8C3; --w-sda:#5DA2FF; --w-scl:#F5B342; --w-btn:#AD90FF;
+  --warn-bg:#2E2410; --warn-fg:#F3CF8A; --warn-line:#5E4A1F;
+  --bad-bg:#2E1517; --bad-fg:#F4A9A9; --bad-line:#5C2A2D;
+  --ok-bg:#13261B; --ok-fg:#9ED9B2; --ok-line:#2B4F39;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:900px;margin:0 auto;padding-inline:20px;padding-block:36px 96px}
+h1,h2{font-family:var(--display);font-weight:700;text-wrap:balance;letter-spacing:-.01em;line-height:1.2;margin:0}
+h1{font-size:clamp(28px,5vw,42px)}
+h2{font-size:clamp(19px,3vw,23px);display:flex;gap:14px;align-items:baseline}
+h2 .n{font-family:var(--mono);font-weight:600;font-size:14px;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:2px 8px;flex:none;position:relative;top:-3px}
+h3{font-size:17px;font-weight:600;margin:28px 0 8px}
+p{margin:0 0 12px;max-width:68ch}
+a{color:var(--accent)}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.lead{font-size:18px;color:var(--muted);margin-top:14px;max-width:62ch}
+.specs{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px;padding:0;list-style:none}
+.specs li{font-size:14px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 12px}
+.specs b{font-family:var(--mono);font-weight:600}
+nav.toc{margin-top:28px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding-block:16px}
+nav.toc ol{columns:2 240px;column-gap:32px;margin:0;padding-left:22px;font-size:15px}
+nav.toc li{margin:2px 0;break-inside:avoid}
+nav.toc li::marker{font-family:var(--mono);color:var(--muted);font-size:13px}
+section{margin-top:56px;scroll-margin-top:16px}
+section > h2{margin-bottom:16px}
+code,kbd,.mono{font-family:var(--mono);font-size:.88em}
+code{background:var(--code-bg);padding:1px 6px;border-radius:5px;white-space:nowrap}
+kbd{border:1px solid var(--line);border-bottom-width:2px;background:var(--surface);border-radius:5px;padding:0 6px;white-space:nowrap}
+pre{font-family:var(--mono);font-size:13.5px;line-height:1.55;background:var(--code-bg);border-radius:10px;padding:14px 16px;overflow-x:auto;margin:10px 0 16px}
+pre code{background:none;padding:0;white-space:pre}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin:16px 0 8px}
+.fig .scroll{overflow-x:auto}
+.fig svg{display:block;width:100%;height:auto;min-width:600px}
+.fig figcaption{font-size:14px;color:var(--muted);margin-top:10px}
+figure{margin:0}
+.tbl-wrap{overflow-x:auto;margin:12px 0 8px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+th{font-size:12px;font-family:var(--mono);font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+td.pin{font-family:var(--mono);font-weight:600;white-space:nowrap}
+.sw{display:inline-block;width:26px;height:6px;border-radius:3px;vertical-align:middle;margin-right:8px}
+.sw.pwr{background:var(--w-pwr)}.sw.gnd{background:var(--w-gnd)}.sw.sda{background:var(--w-sda)}.sw.scl{background:var(--w-scl)}.sw.btn{background:var(--w-btn)}
+.note{border:1px solid;border-radius:12px;padding:12px 16px;margin:14px 0;font-size:15px}
+.note p{margin:0 0 6px}.note p:last-child{margin:0}
+.note b.t{display:block;margin-bottom:2px}
+.note.warn{background:var(--warn-bg);color:var(--warn-fg);border-color:var(--warn-line)}
+.note.bad{background:var(--bad-bg);color:var(--bad-fg);border-color:var(--bad-line)}
+.note.ok{background:var(--ok-bg);color:var(--ok-fg);border-color:var(--ok-line)}
+.note code{background:transparent;border:1px solid currentColor;border-color:color-mix(in srgb,currentColor 30%,transparent)}
+ol.steps{list-style:none;counter-reset:s;padding:0;margin:12px 0}
+ol.steps > li{counter-increment:s;position:relative;padding-left:44px;margin:0 0 14px;max-width:72ch}
+ol.steps > li::before{content:counter(s);position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-family:var(--mono);font-weight:600;font-size:14px;display:grid;place-items:center}
+ul{padding-left:22px}
+ul li{margin:4px 0;max-width:70ch}
+.flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
+@media (max-width:720px){.flow{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.flow .st{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
+.flow .st .k{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.flow .st .h{font-weight:600;margin:2px 0 4px}
+.flow .st p{font-size:14px;margin:0;color:var(--muted)}
+.drive{display:inline-block;font-family:var(--mono);font-size:12px;font-weight:600;padding:1px 7px;border-radius:5px;background:var(--fg);color:var(--bg)}
+.tree{font-family:var(--mono);font-size:14px;line-height:1.8;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px;overflow-x:auto;white-space:pre}
+.tree .c{color:var(--muted)}
+.tree .tag{font-family:var(--body);font-size:12px;font-weight:600;border-radius:4px;padding:1px 6px;margin-left:6px}
+.tag.last{background:var(--warn-bg);color:var(--warn-fg)}
+.tag.no{background:var(--bad-bg);color:var(--bad-fg)}
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:640px){.cols{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+.card h4{margin:0 0 6px;font-size:15px}
+.card ol,.card ul{margin:0;padding-left:20px;font-size:15px}
+.led{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:8px;vertical-align:-1px}
+.led.blue{background:#2F7BFF;box-shadow:0 0 0 3px color-mix(in srgb,#2F7BFF 25%,transparent)}
+.led.red{background:#F03A3A;box-shadow:0 0 0 3px color-mix(in srgb,#F03A3A 25%,transparent)}
+.led.green{background:#22B455;box-shadow:0 0 0 3px color-mix(in srgb,#22B455 25%,transparent)}
+.check li{list-style:none;position:relative;padding-left:28px}
+.check{padding-left:0}
+.check li::before{content:"";position:absolute;left:2px;top:5px;width:14px;height:14px;border:1.5px solid var(--muted);border-radius:4px}
+footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+/* SVG */
+.s-board{fill:var(--zero);stroke:var(--zero-edge);stroke-width:1.5}
+.s-bt{fill:var(--zero-fg);font:600 12px var(--mono)}
+.s-bm{fill:var(--zero-muted);font:400 12px var(--mono)}
+.s-pad{fill:var(--copper)}
+.s-chip{fill:var(--chip)}
+.s-led{fill:#F4F6F8}
+.s-ledt{fill:#1F242B;font:600 11px var(--mono)}
+.s-usb{fill:#AEB6BE;stroke:#7D8791;stroke-width:1}
+.s-usbt{fill:#1F242B;font:600 11px var(--mono)}
+.s-t{fill:var(--fg);font:400 13px var(--body)}
+.s-tb{fill:var(--fg);font:600 13px var(--body)}
+.s-m{fill:var(--muted);font:400 12px var(--body)}
+.s-oled{fill:var(--oled);stroke:var(--oled-edge);stroke-width:1.5}
+.s-ot{fill:var(--oled-fg);font:600 12px var(--mono)}
+.s-om{fill:var(--oled-fg);opacity:.7;font:400 11px var(--mono)}
+.s-glass{fill:var(--glass)}
+.s-hdr{fill:var(--header)}
+.s-pin{fill:var(--pinmetal)}
+.s-flex{fill:var(--flex);opacity:.85}
+.s-smd{fill:#15181C}
+.s-padlt{fill:#E3E7EB}
+.s-btnbody{fill:var(--btnbody)}
+.s-btncap{fill:var(--btncap)}
+.s-leg{stroke:var(--muted);stroke-width:4;stroke-linecap:round}
+.s-dash{stroke:var(--zero-muted);stroke-width:1.5;stroke-dasharray:4 4;fill:none}
+.s-sym{stroke:var(--sym);stroke-width:2;fill:none;stroke-linecap:round}
+.s-ok{fill:var(--ok-fg);font:600 13px var(--body)}
+.s-bad{fill:var(--bad-fg);font:600 13px var(--body)}
+.w{fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.w-pwr{stroke:var(--w-pwr)}.w-gnd{stroke:var(--w-gnd)}.w-sda{stroke:var(--w-sda)}.w-scl{stroke:var(--w-scl)}.w-btn{stroke:var(--w-btn)}
+.d-gnd{fill:var(--w-gnd)}
+.chip-r{fill:var(--surface);stroke-width:2}
+.chip-t{fill:var(--fg);font:600 12px var(--mono)}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="eyebrow">Инструкция по сборке, прошивке и работе · PassPuck 2.0</div>
+  <h1>PassPuck</h1>
+  <p class="lead">Карманный менеджер паролей. Компьютер видит его как обычную USB-клавиатуру: выберите профиль кнопками, нажмите «Ввод», и устройство само наберёт пароль. Ещё PassPuck может не давать компьютеру уснуть и блокирует его сочетанием кнопок.</p>
+  <ul class="specs">
+    <li><b>6</b> профилей паролей</li>
+    <li>пароли на <b>латинице и по-русски</b></li>
+    <li><b>3</b> кнопки</li>
+    <li>экран <b>OLED 1.3″</b></li>
+    <li>плата <b>Waveshare RP2040-Zero</b></li>
+    <li><b>CircuitPython 10.2.1</b></li>
+  </ul>
+  <nav class="toc" aria-label="Содержание">
+    <ol>
+      <li><a href="#parts">Что понадобится</a></li>
+      <li><a href="#board">Контакты платы RP2040-Zero</a></li>
+      <li><a href="#table">Таблица соединений</a></li>
+      <li><a href="#oled">Экран: где какой контакт</a></li>
+      <li><a href="#buttons">Кнопки: какие ножки паять</a></li>
+      <li><a href="#wiring">Общая схема</a></li>
+      <li><a href="#solder">Пайка и проверка</a></li>
+      <li><a href="#flash">Прошивка</a></li>
+      <li><a href="#first">Первый запуск</a></li>
+      <li><a href="#windows">Настройка Windows</a></li>
+      <li><a href="#config">Пароли и названия профилей</a></li>
+      <li><a href="#controls">Управление и меню</a></li>
+      <li><a href="#edit">Режим редактирования</a></li>
+      <li><a href="#tuning">Тонкая настройка</a></li>
+      <li><a href="#trouble">Если что-то не работает</a></li>
+      <li><a href="#security">Безопасность</a></li>
+    </ol>
+  </nav>
+</header>
+
+<section id="parts">
+  <h2><span class="n">01</span>Что понадобится</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Деталь</th><th>Что именно</th><th>Кол-во</th></tr></thead>
+    <tbody>
+      <tr><td>Плата</td><td>Waveshare <b>RP2040-Zero</b> (маленькая, с USB-C и RGB-светодиодом)</td><td>1</td></tr>
+      <tr><td>Экран</td><td>OLED <b>1.3″ I2C</b> (на обороте надпись «1.30″ IIC», контроллер SH1106), 4 контакта. Подойдёт и 0.96″ SSD1306, но тогда нужна одна правка в коде (<a href="#tuning">раздел 14</a>)</td><td>1</td></tr>
+      <tr><td>Кнопки</td><td>Тактовые кнопки без фиксации, 4 ножки (обычно 6×6 мм)</td><td>3</td></tr>
+      <tr><td>Провод</td><td>Тонкий монтажный (МГТФ 0,07–0,12 мм² или аналог), лучше нескольких цветов</td><td>~50 см</td></tr>
+      <tr><td>Корпус</td><td>Файл <code>PassGen_full_case_rp2040.3mf</code> из папки <code>3_корпус</code> комплекта</td><td>1</td></tr>
+      <tr><td>Кабель</td><td>USB-C с передачей данных (кабели «только для зарядки» не подойдут)</td><td>1</td></tr>
+    </tbody>
+  </table></div>
+  <p><b>Инструмент:</b> паяльник (лучше с регулировкой, около 300–330 °C), припой с флюсом, флюс, кусачки, пинцет, мультиметр. Мультиметр нужен обязательно: перед первым включением им проверяется, что нет замыкания.</p>
+</section>
+
+<section id="board">
+  <h2><span class="n">02</span>Контакты платы RP2040-Zero</h2>
+  <p>Плата показана компонентами вверх, разъём USB-C смотрит вверх. Подписи контактов есть и на самой плате, рядом с каждым отверстием: сверяйтесь с ними.</p>
+  <figure class="fig">
+    <div class="scroll">
+    <svg viewBox="0 0 720 400" role="img" aria-labelledby="fa-t fa-d">
+      <title id="fa-t">Распиновка RP2040-Zero</title>
+      <desc id="fa-d">Слева сверху вниз: 5V, GND, 3V3, GP29, GP28, GP27, GP26, GP15, GP14. Справа: GP0–GP8. Используются GND и 3V3 слева, GP4–GP8 справа.</desc>
+      <rect class="s-board" x="270" y="56" width="180" height="300" rx="12"/>
+      <rect class="s-usb" x="330" y="40" width="60" height="26" rx="6"/>
+      <text class="s-usbt" x="360" y="54" text-anchor="middle" dominant-baseline="central">USB-C</text>
+      <rect class="s-led" x="344" y="86" width="32" height="20" rx="3"/>
+      <text class="s-ledt" x="360" y="96" text-anchor="middle" dominant-baseline="central">RGB</text>
+      <text class="s-bm" x="360" y="122" text-anchor="middle" dominant-baseline="central">GP16</text>
+      <rect class="s-chip" x="328" y="175" width="64" height="64" rx="4"/>
+      <text class="s-bm" x="360" y="207" text-anchor="middle" dominant-baseline="central">RP2040</text>
+      <g text-anchor="start" dominant-baseline="central">
+        <text class="s-bm" x="284" y="90">5V</text>
+        <text class="s-bt" x="284" y="120">GND</text>
+        <text class="s-bt" x="284" y="150">3V3</text>
+        <text class="s-bm" x="284" y="180">GP29</text>
+        <text class="s-bm" x="284" y="210">GP28</text>
+        <text class="s-bm" x="284" y="240">GP27</text>
+        <text class="s-bm" x="284" y="270">GP26</text>
+        <text class="s-bm" x="284" y="300">GP15</text>
+        <text class="s-bm" x="284" y="330">GP14</text>
+      </g>
+      <g text-anchor="end" dominant-baseline="central">
+        <text class="s-bm" x="436" y="90">GP0</text>
+        <text class="s-bm" x="436" y="120">GP1</text>
+        <text class="s-bm" x="436" y="150">GP2</text>
+        <text class="s-bm" x="436" y="180">GP3</text>
+        <text class="s-bt" x="436" y="210">GP4</text>
+        <text class="s-bt" x="436" y="240">GP5</text>
+        <text class="s-bt" x="436" y="270">GP6</text>
+        <text class="s-bt" x="436" y="300">GP7</text>
+        <text class="s-bt" x="436" y="330">GP8</text>
+      </g>
+      <g class="s-pad">
+        <circle cx="270" cy="90" r="7"/><circle cx="270" cy="120" r="7"/><circle cx="270" cy="150" r="7"/><circle cx="270" cy="180" r="7"/><circle cx="270" cy="210" r="7"/><circle cx="270" cy="240" r="7"/><circle cx="270" cy="270" r="7"/><circle cx="270" cy="300" r="7"/><circle cx="270" cy="330" r="7"/>
+        <circle cx="450" cy="90" r="7"/><circle cx="450" cy="120" r="7"/><circle cx="450" cy="150" r="7"/><circle cx="450" cy="180" r="7"/><circle cx="450" cy="210" r="7"/><circle cx="450" cy="240" r="7"/><circle cx="450" cy="270" r="7"/><circle cx="450" cy="300" r="7"/><circle cx="450" cy="330" r="7"/>
+        <circle cx="310" cy="356" r="5"/><circle cx="335" cy="356" r="5"/><circle cx="360" cy="356" r="5"/><circle cx="385" cy="356" r="5"/><circle cx="410" cy="356" r="5"/>
+      </g>
+      <text class="s-m" x="252" y="90" text-anchor="end" dominant-baseline="central">не подключать</text>
+      <line class="w w-gnd" x1="262" y1="120" x2="204" y2="120"/>
+      <text class="s-tb" x="196" y="120" text-anchor="end" dominant-baseline="central">GND экрана и кнопок</text>
+      <line class="w w-pwr" x1="262" y1="150" x2="204" y2="150"/>
+      <text class="s-tb" x="196" y="150" text-anchor="end" dominant-baseline="central">VDD (VCC) экрана</text>
+      <line class="w w-sda" x1="458" y1="210" x2="516" y2="210"/>
+      <text class="s-tb" x="524" y="210" dominant-baseline="central">SDA экрана</text>
+      <line class="w w-scl" x1="458" y1="240" x2="516" y2="240"/>
+      <text class="s-tb" x="524" y="240" dominant-baseline="central">SCL (SCK) экрана</text>
+      <line class="w w-btn" x1="458" y1="270" x2="516" y2="270"/>
+      <text class="s-tb" x="524" y="270" dominant-baseline="central">Кнопка «Назад»</text>
+      <line class="w w-btn" x1="458" y1="300" x2="516" y2="300"/>
+      <text class="s-tb" x="524" y="300" dominant-baseline="central">Кнопка «Ввод»</text>
+      <line class="w w-btn" x1="458" y1="330" x2="516" y2="330"/>
+      <text class="s-tb" x="524" y="330" dominant-baseline="central">Кнопка «Вперёд»</text>
+      <text class="s-m" x="360" y="382" text-anchor="middle" dominant-baseline="central">Снизу ещё 5 контактов (GP9–GP13), они не нужны</text>
+    </svg>
+    </div>
+    <figcaption>RGB-светодиод (GP16) уже стоит на плате, к нему ничего паять не нужно. Кнопки BOOT и RESET на плате понадобятся только при прошивке.</figcaption>
+  </figure>
+</section>
+
+<section id="table">
+  <h2><span class="n">03</span>Таблица соединений</h2>
+  <p>Всего 8 проводов: 4 от экрана и 4 от кнопок (по одному на каждую кнопку плюс общий минус). Цвета в таблице совпадают с цветами на всех схемах. Провода в жизни могут быть любого цвета.</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Откуда</th><th>Контакт</th><th>Куда на RP2040-Zero</th><th>Комментарий</th></tr></thead>
+    <tbody>
+      <tr><td><span class="sw pwr"></span>Экран</td><td class="pin">VDD / VCC</td><td class="pin">3V3</td><td>Только 3V3. На 5V подключать нельзя</td></tr>
+      <tr><td><span class="sw gnd"></span>Экран</td><td class="pin">GND</td><td class="pin">GND</td><td>Общий минус</td></tr>
+      <tr><td><span class="sw scl"></span>Экран</td><td class="pin">SCL / SCK</td><td class="pin">GP5</td><td>Тактовая линия I2C</td></tr>
+      <tr><td><span class="sw sda"></span>Экран</td><td class="pin">SDA</td><td class="pin">GP4</td><td>Линия данных I2C</td></tr>
+      <tr><td><span class="sw btn"></span>Кнопка «Назад»</td><td class="pin">ножка 1</td><td class="pin">GP6</td><td>Если держать её при подключении USB, откроется диск с файлами</td></tr>
+      <tr><td><span class="sw btn"></span>Кнопка «Ввод»</td><td class="pin">ножка 1</td><td class="pin">GP7</td><td>Коротко: ввод. Долго: меню</td></tr>
+      <tr><td><span class="sw btn"></span>Кнопка «Вперёд»</td><td class="pin">ножка 1</td><td class="pin">GP8</td><td></td></tr>
+      <tr><td><span class="sw gnd"></span>Все 3 кнопки</td><td class="pin">ножка 2</td><td class="pin">GND</td><td>Одна общая перемычка на все кнопки</td></tr>
+    </tbody>
+  </table></div>
+  <p>Резисторы не нужны: подтяжка кнопок включается внутри микроконтроллера, а для шины I2C резисторы уже стоят на плате экрана.</p>
+</section>
+
+<section id="oled">
+  <h2><span class="n">04</span>Экран: где какой контакт</h2>
+  <p>У экрана 4 контакта в один ряд. Подписи обычно напечатаны на <b>лицевой</b> стороне, над стеклом. С обратной стороны подписей нет, и порядок там <b>зеркальный</b>: пин 1, который спереди крайний слева, сзади оказывается крайним справа.</p>
+  <figure class="fig">
+    <div class="scroll">
+    <svg viewBox="0 0 720 320" role="img" aria-labelledby="fb-t fb-d">
+      <title id="fb-t">Контакты экрана спереди и сзади</title>
+      <desc id="fb-d">Спереди слева направо: VDD, GND, SCL, SDA. Сзади слева направо: SDA, SCL, GND, VDD.</desc>
+      <rect class="s-oled" x="30" y="70" width="300" height="200" rx="10"/>
+      <rect class="s-hdr" x="86" y="62" width="188" height="16" rx="2"/>
+      <rect class="s-pin" x="105" y="50" width="6" height="14"/><rect class="s-pin" x="153" y="50" width="6" height="14"/><rect class="s-pin" x="201" y="50" width="6" height="14"/><rect class="s-pin" x="249" y="50" width="6" height="14"/>
+      <g text-anchor="middle" dominant-baseline="central">
+        <text class="s-ot" x="108" y="94">VDD</text><text class="s-ot" x="156" y="94">GND</text><text class="s-ot" x="204" y="94">SCL</text><text class="s-ot" x="252" y="94">SDA</text>
+        <text class="s-om" x="108" y="111">1</text><text class="s-om" x="156" y="111">2</text><text class="s-om" x="204" y="111">3</text><text class="s-om" x="252" y="111">4</text>
+      </g>
+      <rect class="s-glass" x="48" y="124" width="264" height="130" rx="4"/>
+      <text class="s-m" x="180" y="189" text-anchor="middle" dominant-baseline="central">стекло</text>
+      <line class="w w-pwr" x1="108" y1="48" x2="108" y2="36"/><line class="w w-gnd" x1="156" y1="48" x2="156" y2="36"/><line class="w w-scl" x1="204" y1="48" x2="204" y2="36"/><line class="w w-sda" x1="252" y1="48" x2="252" y2="36"/>
+      <rect class="chip-r" x="86" y="10" width="44" height="24" rx="5" style="stroke:var(--w-pwr)"/><text class="chip-t" x="108" y="22" text-anchor="middle" dominant-baseline="central">3V3</text>
+      <rect class="chip-r" x="134" y="10" width="44" height="24" rx="5" style="stroke:var(--w-gnd)"/><text class="chip-t" x="156" y="22" text-anchor="middle" dominant-baseline="central">GND</text>
+      <rect class="chip-r" x="182" y="10" width="44" height="24" rx="5" style="stroke:var(--w-scl)"/><text class="chip-t" x="204" y="22" text-anchor="middle" dominant-baseline="central">GP5</text>
+      <rect class="chip-r" x="230" y="10" width="44" height="24" rx="5" style="stroke:var(--w-sda)"/><text class="chip-t" x="252" y="22" text-anchor="middle" dominant-baseline="central">GP4</text>
+      <text class="s-tb" x="180" y="296" text-anchor="middle" dominant-baseline="central">Спереди: стекло смотрит на вас</text>
+
+      <rect class="s-oled" x="390" y="70" width="300" height="200" rx="10"/>
+      <rect class="s-hdr" x="446" y="62" width="188" height="16" rx="2"/>
+      <rect class="s-pin" x="465" y="50" width="6" height="14"/><rect class="s-pin" x="513" y="50" width="6" height="14"/><rect class="s-pin" x="561" y="50" width="6" height="14"/><rect class="s-pin" x="609" y="50" width="6" height="14"/>
+      <g text-anchor="middle" dominant-baseline="central">
+        <text class="s-ot" x="468" y="94">SDA</text><text class="s-ot" x="516" y="94">SCL</text><text class="s-ot" x="564" y="94">GND</text><text class="s-ot" x="612" y="94">VDD</text>
+        <text class="s-om" x="468" y="111">4</text><text class="s-om" x="516" y="111">3</text><text class="s-om" x="564" y="111">2</text><text class="s-om" x="612" y="111">1</text>
+      </g>
+      <text class="s-om" x="408" y="134" dominant-baseline="central">1.30" IIC</text>
+      <text class="s-om" x="540" y="156" text-anchor="middle" dominant-baseline="central">перемычки 1(VDD) · 1(GND)</text>
+      <g class="s-smd"><rect x="420" y="176" width="10" height="6"/><rect x="445" y="176" width="10" height="6"/><rect x="470" y="176" width="10" height="6"/><rect x="495" y="176" width="10" height="6"/><rect x="520" y="176" width="10" height="6"/><rect x="545" y="176" width="10" height="6"/><rect x="570" y="176" width="10" height="6"/><rect x="595" y="176" width="10" height="6"/><rect x="620" y="176" width="10" height="6"/><rect x="645" y="176" width="10" height="6"/></g>
+      <rect class="s-flex" x="460" y="212" width="160" height="58" rx="3"/>
+      <text class="s-om" x="540" y="241" text-anchor="middle" dominant-baseline="central">шлейф стекла</text>
+      <line class="w w-sda" x1="468" y1="48" x2="468" y2="36"/><line class="w w-scl" x1="516" y1="48" x2="516" y2="36"/><line class="w w-gnd" x1="564" y1="48" x2="564" y2="36"/><line class="w w-pwr" x1="612" y1="48" x2="612" y2="36"/>
+      <rect class="chip-r" x="446" y="10" width="44" height="24" rx="5" style="stroke:var(--w-sda)"/><text class="chip-t" x="468" y="22" text-anchor="middle" dominant-baseline="central">GP4</text>
+      <rect class="chip-r" x="494" y="10" width="44" height="24" rx="5" style="stroke:var(--w-scl)"/><text class="chip-t" x="516" y="22" text-anchor="middle" dominant-baseline="central">GP5</text>
+      <rect class="chip-r" x="542" y="10" width="44" height="24" rx="5" style="stroke:var(--w-gnd)"/><text class="chip-t" x="564" y="22" text-anchor="middle" dominant-baseline="central">GND</text>
+      <rect class="chip-r" x="590" y="10" width="44" height="24" rx="5" style="stroke:var(--w-pwr)"/><text class="chip-t" x="612" y="22" text-anchor="middle" dominant-baseline="central">3V3</text>
+      <text class="s-tb" x="540" y="296" text-anchor="middle" dominant-baseline="central">Сзади: так экран лежит в корпусе</text>
+    </svg>
+    </div>
+    <figcaption>Над каждым контактом подписано, куда он идёт на RP2040-Zero. Показан самый распространённый вариант: пин 1 = VDD, пин 2 = GND.</figcaption>
+  </figure>
+
+  <div class="note bad">
+    <b class="t">Перед пайкой проверьте, где у вашего экрана плюс, а где минус</b>
+    <p>На экранах 1.3″ первые два контакта можно поменять местами перемычками на обороте. Бывают модули с порядком <code>GND VDD SCL SDA</code>. Если перепутать питание, экран сгорит. SDA и SCL всегда стоят на 3-м и 4-м местах, их путаница ничего не сожжёт.</p>
+  </div>
+
+  <h3>Как узнать порядок, если подписи спереди не видно</h3>
+  <p>На обороте у разъёма есть две строки перемычек: <code>1(VDD) … 1(GND)</code> и <code>2(VDD) … 2(GND)</code>. В каждой строке стоит маленький чёрный резистор-перемычка, и он сдвинут к одной из надписей. Эта надпись и есть назначение контакта.</p>
+  <figure class="fig">
+    <div class="scroll">
+    <svg viewBox="0 0 720 170" role="img" aria-labelledby="fc-t fc-d">
+      <title id="fc-t">Перемычки выбора питания</title>
+      <desc id="fc-d">В строке 1 перемычка сдвинута к VDD, значит пин 1 это VDD. В строке 2 перемычка сдвинута к GND, значит пин 2 это GND.</desc>
+      <rect class="s-oled" x="130" y="20" width="430" height="110" rx="10"/>
+      <g dominant-baseline="central">
+        <text class="s-ot" x="236" y="52" text-anchor="end">2(VDD)</text>
+        <text class="s-ot" x="380" y="52">2(GND)</text>
+        <text class="s-ot" x="236" y="98" text-anchor="end">1(VDD)</text>
+        <text class="s-ot" x="380" y="98">1(GND)</text>
+      </g>
+      <g class="s-padlt"><rect x="250" y="43" width="22" height="18" rx="2"/><rect x="285" y="43" width="22" height="18" rx="2"/><rect x="320" y="43" width="22" height="18" rx="2"/>
+      <rect x="250" y="89" width="22" height="18" rx="2"/><rect x="285" y="89" width="22" height="18" rx="2"/><rect x="320" y="89" width="22" height="18" rx="2"/></g>
+      <rect class="s-smd" x="290" y="46" width="47" height="12" rx="2"/>
+      <rect class="s-smd" x="255" y="92" width="47" height="12" rx="2"/>
+      <text class="s-tb" x="580" y="52" dominant-baseline="central">пин 2 = GND</text>
+      <text class="s-tb" x="580" y="98" dominant-baseline="central">пин 1 = VDD</text>
+      <text class="s-m" x="360" y="153" text-anchor="middle" dominant-baseline="central">Перемычка ближе к «VDD»: контакт будет плюсом. Ближе к «GND»: минусом</text>
+    </svg>
+    </div>
+    <figcaption>Схема условная: на разных партиях площадки выглядят немного по-разному, но принцип тот же.</figcaption>
+  </figure>
+  <p><b>Самая надёжная проверка мультиметром.</b> Включите режим прозвонки. Одним щупом коснитесь контакта, который вы считаете GND, другим коснитесь минусовой площадки любого конденсатора на обороте или широкой медной заливки платы. Если мультиметр пищит, это GND.</p>
+</section>
+
+<section id="buttons">
+  <h2><span class="n">05</span>Кнопки: какие ножки паять</h2>
+  <p>У тактовой кнопки 4 ножки, но внутри они попарно соединены. Если припаять оба провода к ножкам одной пары, кнопка будет «нажата» всегда. Самый простой способ не ошибиться: <b>паять на ножки по диагонали</b>. Они всегда относятся к разным парам.</p>
+  <figure class="fig">
+    <div class="scroll">
+    <svg viewBox="0 0 720 250" role="img" aria-labelledby="fd-t fd-d">
+      <title id="fd-t">Подключение тактовой кнопки</title>
+      <desc id="fd-d">Слева правильно: провода на диагональные ножки. Справа неправильно: провода на две ножки одной пары, кнопка замкнута всегда.</desc>
+      <text class="s-ok" x="200" y="30" text-anchor="middle" dominant-baseline="central">Правильно: по диагонали</text>
+      <line class="s-leg" x1="125" y1="85" x2="155" y2="85"/><line class="s-leg" x1="245" y1="85" x2="275" y2="85"/>
+      <line class="s-leg" x1="125" y1="145" x2="155" y2="145"/><line class="s-leg" x1="245" y1="145" x2="275" y2="145"/>
+      <rect class="s-btnbody" x="155" y="70" width="90" height="90" rx="6"/>
+      <line class="s-dash" x1="160" y1="80" x2="240" y2="80"/><line class="s-dash" x1="160" y1="150" x2="240" y2="150"/>
+      <circle class="s-btncap" cx="200" cy="115" r="24"/>
+      <line class="w w-btn" x1="120" y1="85" x2="88" y2="85"/>
+      <text class="s-tb" x="80" y="85" text-anchor="end" dominant-baseline="central">к GP</text>
+      <line class="w w-gnd" x1="280" y1="145" x2="312" y2="145"/>
+      <text class="s-tb" x="320" y="145" dominant-baseline="central">к GND</text>
+      <text class="s-m" x="200" y="190" text-anchor="middle" dominant-baseline="central">Работает при любом повороте кнопки</text>
+
+      <text class="s-bad" x="520" y="30" text-anchor="middle" dominant-baseline="central">Неправильно: одна пара</text>
+      <line class="s-leg" x1="445" y1="85" x2="475" y2="85"/><line class="s-leg" x1="565" y1="85" x2="595" y2="85"/>
+      <line class="s-leg" x1="445" y1="145" x2="475" y2="145"/><line class="s-leg" x1="565" y1="145" x2="595" y2="145"/>
+      <rect class="s-btnbody" x="475" y="70" width="90" height="90" rx="6"/>
+      <line class="s-dash" x1="480" y1="80" x2="560" y2="80"/><line class="s-dash" x1="480" y1="150" x2="560" y2="150"/>
+      <circle class="s-btncap" cx="520" cy="115" r="24"/>
+      <line class="w w-btn" x1="440" y1="85" x2="408" y2="85"/>
+      <text class="s-tb" x="400" y="85" text-anchor="end" dominant-baseline="central">к GP</text>
+      <line class="w w-gnd" x1="600" y1="85" x2="632" y2="85"/>
+      <text class="s-tb" x="640" y="85" dominant-baseline="central">к GND</text>
+      <text class="s-m" x="520" y="190" text-anchor="middle" dominant-baseline="central">Ножки уже соединены внутри:</text>
+      <text class="s-m" x="520" y="208" text-anchor="middle" dominant-baseline="central">кнопка «нажата» постоянно</text>
+      <text class="s-m" x="360" y="236" text-anchor="middle" dominant-baseline="central">Пунктир показывает, какие ножки соединены внутри кнопки всегда</text>
+    </svg>
+    </div>
+    <figcaption>Проверка мультиметром: между выбранными ножками в покое тишина, при нажатии кнопки писк.</figcaption>
+  </figure>
+  <p>Вторые ножки всех трёх кнопок соедините одной общей перемычкой (голый луженый провод или отрезок МГТФ от кнопки к кнопке) и одним проводом заведите на GND платы.</p>
+</section>
+
+<section id="wiring">
+  <h2><span class="n">06</span>Общая схема</h2>
+  <p>Все соединения на одной картинке. Экран нарисован условно: важно только, какой провод идёт к какой надписи.</p>
+  <figure class="fig">
+    <div class="scroll">
+    <svg viewBox="0 0 740 548" role="img" aria-labelledby="fe-t fe-d">
+      <title id="fe-t">Полная схема соединений PassPuck</title>
+      <desc id="fe-d">Экран: SDA к GP4, SCL к GP5, GND к GND, VDD к 3V3. Кнопки Назад, Ввод, Вперёд одной ножкой к GP6, GP7, GP8, другой к общей шине GND, которая идёт на GND платы.</desc>
+      <rect class="s-oled" x="40" y="130" width="190" height="150" rx="10"/>
+      <text class="s-ot" x="105" y="185" text-anchor="middle" dominant-baseline="central">OLED 1.3"</text>
+      <text class="s-om" x="105" y="205" text-anchor="middle" dominant-baseline="central">SH1106 · I2C</text>
+      <g text-anchor="end" dominant-baseline="central">
+        <text class="s-ot" x="216" y="160">SDA</text><text class="s-ot" x="216" y="190">SCL</text><text class="s-ot" x="216" y="220">GND</text><text class="s-ot" x="216" y="250">VDD</text>
+      </g>
+      <g class="s-pin"><rect x="226" y="155" width="12" height="10"/><rect x="226" y="185" width="12" height="10"/><rect x="226" y="215" width="12" height="10"/><rect x="226" y="245" width="12" height="10"/></g>
+      <text class="s-m" x="135" y="300" text-anchor="middle" dominant-baseline="central">подписи как на плате экрана</text>
+
+      <rect class="s-board" x="300" y="150" width="160" height="320" rx="12"/>
+      <rect class="s-usb" x="350" y="134" width="60" height="26" rx="6"/>
+      <text class="s-usbt" x="380" y="148" text-anchor="middle" dominant-baseline="central">USB-C</text>
+      <rect class="s-led" x="364" y="178" width="32" height="18" rx="3"/>
+      <text class="s-ledt" x="380" y="187" text-anchor="middle" dominant-baseline="central">RGB</text>
+      <rect class="s-chip" x="352" y="290" width="56" height="56" rx="4"/>
+      <text class="s-bm" x="380" y="318" text-anchor="middle" dominant-baseline="central">RP2040</text>
+      <g dominant-baseline="central">
+        <text class="s-bm" x="314" y="190">5V</text><text class="s-bt" x="314" y="220">GND</text><text class="s-bt" x="314" y="250">3V3</text><text class="s-bm" x="314" y="280">29</text><text class="s-bm" x="314" y="310">28</text><text class="s-bm" x="314" y="340">27</text><text class="s-bm" x="314" y="370">26</text><text class="s-bm" x="314" y="400">15</text><text class="s-bm" x="314" y="430">14</text>
+      </g>
+      <g text-anchor="end" dominant-baseline="central">
+        <text class="s-bm" x="446" y="190">0</text><text class="s-bm" x="446" y="220">1</text><text class="s-bm" x="446" y="250">2</text><text class="s-bm" x="446" y="280">3</text><text class="s-bt" x="446" y="310">GP4</text><text class="s-bt" x="446" y="340">GP5</text><text class="s-bt" x="446" y="370">GP6</text><text class="s-bt" x="446" y="400">GP7</text><text class="s-bt" x="446" y="430">GP8</text>
+      </g>
+      <g class="s-pad">
+        <circle cx="300" cy="190" r="7"/><circle cx="300" cy="220" r="7"/><circle cx="300" cy="250" r="7"/><circle cx="300" cy="280" r="7"/><circle cx="300" cy="310" r="7"/><circle cx="300" cy="340" r="7"/><circle cx="300" cy="370" r="7"/><circle cx="300" cy="400" r="7"/><circle cx="300" cy="430" r="7"/>
+        <circle cx="460" cy="190" r="7"/><circle cx="460" cy="220" r="7"/><circle cx="460" cy="250" r="7"/><circle cx="460" cy="280" r="7"/><circle cx="460" cy="310" r="7"/><circle cx="460" cy="340" r="7"/><circle cx="460" cy="370" r="7"/><circle cx="460" cy="400" r="7"/><circle cx="460" cy="430" r="7"/>
+      </g>
+
+      <path class="w w-gnd" d="M238 220 H293"/>
+      <path class="w w-pwr" d="M238 250 H293"/>
+      <path class="w w-scl" d="M238 190 H285 V115 H485 V340 H467"/>
+      <path class="w w-sda" d="M238 160 H270 V100 H500 V310 H493 A8 8 0 0 0 477 310 H467"/>
+
+      <path class="w w-btn" d="M467 370 H562"/><path class="w w-btn" d="M467 400 H562"/><path class="w w-btn" d="M467 430 H562"/>
+      <g class="s-sym">
+        <circle cx="566" cy="370" r="4"/><circle cx="612" cy="370" r="4"/><line x1="569" y1="367" x2="608" y2="356"/>
+        <circle cx="566" cy="400" r="4"/><circle cx="612" cy="400" r="4"/><line x1="569" y1="397" x2="608" y2="386"/>
+        <circle cx="566" cy="430" r="4"/><circle cx="612" cy="430" r="4"/><line x1="569" y1="427" x2="608" y2="416"/>
+      </g>
+      <g class="s-t" dominant-baseline="central">
+        <text x="482" y="360">Назад</text><text x="482" y="390">Ввод</text><text x="482" y="420">Вперёд</text>
+      </g>
+      <path class="w w-gnd" d="M616 370 H690"/><path class="w w-gnd" d="M616 400 H690"/><path class="w w-gnd" d="M616 430 H690"/>
+      <path class="w w-gnd" d="M690 370 V500 H262 V258 A8 8 0 0 0 262 242 V220"/>
+      <circle class="d-gnd" cx="690" cy="400" r="5"/><circle class="d-gnd" cx="690" cy="430" r="5"/><circle class="d-gnd" cx="262" cy="220" r="5"/>
+      <text class="s-m" x="476" y="514" text-anchor="middle" dominant-baseline="central">общий GND кнопок</text>
+
+      <circle class="d-gnd" cx="56" cy="532" r="5"/>
+      <text class="s-m" x="70" y="532" dominant-baseline="central">точка: провода соединены</text>
+      <path class="w w-gnd" d="M262 532 H276 A8 8 0 0 1 292 532 H306" style="stroke-width:2"/>
+      <text class="s-m" x="318" y="532" dominant-baseline="central">дуга: провода просто пересекаются</text>
+    </svg>
+    </div>
+    <figcaption>На пин GND платы приходят два провода: от экрана и от общей перемычки кнопок. Их можно облудить вместе и запаять в одно отверстие.</figcaption>
+  </figure>
+</section>
+
+<section id="solder">
+  <h2><span class="n">07</span>Пайка и проверка</h2>
+  <ol class="steps">
+    <li><b>Примерьте детали в корпусе.</b> Прикиньте длину проводов с запасом 1–2 см, чтобы крышка закрывалась без натяга.</li>
+    <li><b>Залудите все точки пайки:</b> отверстия платы GND, 3V3, GP4–GP8, штырьки экрана и ножки кнопок. Концы проводов зачистите на 2–3 мм и тоже залудите.</li>
+    <li><b>Экран.</b> Определите VDD и GND (<a href="#oled">раздел 4</a>), затем припаяйте 4 провода прямо к штырькам. Лишнюю длину штырьков можно откусить, если они мешают крышке.</li>
+    <li><b>Кнопки.</b> Сначала соедините вторые ножки всех трёх кнопок общей перемычкой, потом припаяйте к первым ножкам провода на GP6, GP7, GP8 (<a href="#buttons">раздел 5</a>).</li>
+    <li><b>Плата.</b> Припаяйте всё к RP2040-Zero по <a href="#table">таблице</a>. Паяйте быстро и не перегревайте плату: 2–3 секунды на точку.</li>
+    <li><b>Осмотрите пайку.</b> Не должно быть капель припоя между соседними контактами, особенно между GND и 3V3: они стоят рядом.</li>
+  </ol>
+  <div class="note warn">
+    <b class="t">Проверка мультиметром до первого подключения к USB</b>
+    <p>В режиме прозвонки проверьте:</p>
+    <ul class="check">
+      <li>3V3 и GND платы <b>не звонятся</b> между собой. Если пищит, где-то замыкание, искать его нужно до включения;</li>
+      <li>GP4 и GP5 не звонятся с GND и друг с другом;</li>
+      <li>GP6, GP7, GP8 звонятся с GND <b>только при нажатии</b> своей кнопки.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="flash">
+  <h2><span class="n">08</span>Прошивка</h2>
+  <p>Прошивка делается один раз на каждое устройство. Все нужные файлы лежат в комплекте <code>PassPuck kit.zip</code>: прошивка в папке <code>1_прошивка</code>, файлы для устройства в <code>2_на_устройство</code>.</p>
+  <div class="flow">
+    <div class="st"><div class="k">шаг 1</div><div class="h">Зажать BOOT</div><p>Держите кнопку BOOT на плате и вставьте USB. Затем отпустите.</p></div>
+    <div class="st"><div class="k">шаг 2</div><div class="h">Диск <span class="drive">RPI-RP2</span></div><p>В «Этом компьютере» появится новый диск, это загрузчик платы.</p></div>
+    <div class="st"><div class="k">шаг 3</div><div class="h">Скопировать .uf2</div><p>Скопируйте на него файл прошивки. Плата сама перезагрузится.</p></div>
+    <div class="st"><div class="k">шаг 4</div><div class="h">Диск <span class="drive">CIRCUITPY</span></div><p>Вместо RPI-RP2 появится CIRCUITPY. На него копируются файлы программы.</p></div>
+  </div>
+  <p>Файл прошивки: <code>adafruit-circuitpython-waveshare_rp2040_zero-ru-10.2.1.uf2</code>.</p>
+  <h3>Какие файлы копировать на CIRCUITPY</h3>
+  <p>Всё содержимое папки <code>2_на_устройство</code> копируется в корень диска. Порядок важен: <code>boot.py</code> всегда последним.</p>
+<div class="tree">CIRCUITPY/
+├── lib/                   <span class="c"># библиотеки, папка целиком</span>
+├── fonts/                 <span class="c"># шрифт с русскими буквами</span>
+├── code.py                <span class="c"># программа</span>
+├── passwords.py           <span class="c"># пароли и названия профилей</span>
+├── PassPuck Editor.html   <span class="c"># редактор паролей</span>
+└── boot.py<span class="tag last">последним</span>
+
+<span class="c">Появятся сами:</span> log.txt  passwords.bak  boot_out.txt
+<span class="c">Не нужны:</span> .fseventsd  .Trashes  .Trash-1000  .metadata_never_index  settings.toml  sd/<span class="tag no">служебный мусор</span></div>
+  <div class="note warn">
+    <b class="t">Почему boot.py последним</b>
+    <p><code>boot.py</code> прячет диск CIRCUITPY при каждом включении. Если скопировать его раньше остальных файлов и плата перезагрузится, диск пропадёт. Тогда откройте его кнопкой «Назад» (<a href="#edit">раздел 13</a>) и докопируйте файлы.</p>
+  </div>
+  <p>При обновлении уже работающего устройства копируйте всё, <b>кроме <code>passwords.py</code></b>, чтобы не затереть свои пароли.</p>
+</section>
+
+<section id="first">
+  <h2><span class="n">09</span>Первый запуск</h2>
+  <p>Отключите плату от USB и подключите снова, <b>не нажимая кнопок</b>. Правильный результат выглядит так:</p>
+  <ul class="check">
+    <li>на секунду появляется заставка <code>PassPuck</code> и номер версии;</li>
+    <li>затем главный экран: <code>Prof 1/6 [Auto]</code> и название профиля;</li>
+    <li>светодиод медленно пульсирует синим;</li>
+    <li>диск CIRCUITPY <b>не</b> появляется: так задумано, это защита.</li>
+  </ul>
+  <p>Если в комплекте был пустой шаблон <code>passwords.py</code>, паролей пока нет: при нажатии «Ввод» устройство напишет <code>No password!</code>. Задайте их редактором (<a href="#config">раздел 11</a>).</p>
+</section>
+
+<section id="windows">
+  <h2><span class="n">10</span>Настройка Windows</h2>
+  <p>Устройство набирает пароль, нажимая клавиши, а какая буква получится, решает раскладка Windows. Поэтому перед каждым паролем устройство само переключает раскладку сочетаниями клавиш. Эти сочетания нужно <b>один раз настроить на каждом компьютере</b>, где используется PassPuck.</p>
+  <ol class="steps">
+    <li>Windows 11: <b>Параметры → Время и язык → Ввод → Дополнительные параметры клавиатуры → Сочетания клавиш для языков ввода</b>.</li>
+    <li>Выберите строку с <b>английским</b> языком → «Сменить сочетание клавиш» → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd>.</li>
+    <li>Выберите строку с <b>русским</b> языком → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>2</kbd>.</li>
+  </ol>
+  <h3>Чтобы пароль набирался на экране входа в Windows</h3>
+  <p>Экран блокировки работает со своими настройками языка и про сочетания из шагов выше не знает. Для пароля от Windows скопируйте их туда (нужны права администратора):</p>
+  <ol class="steps">
+    <li><kbd>Win</kbd>+<kbd>R</kbd> → <code>intl.cpl</code> → Enter.</li>
+    <li>Вкладка <b>«Дополнительно»</b> → <b>«Копировать параметры…»</b>.</li>
+    <li>Отметьте <b>«Экран приветствия и системные учётные записи»</b> → ОК, перезагрузите компьютер.</li>
+  </ol>
+  <p>Для профиля с паролем от Windows включите в его меню <b>Ctrl first</b> (<a href="#controls">раздел 12</a>), иначе первый символ может потеряться на заставке с часами.</p>
+  <div class="note warn">
+    <b class="t">Mac, Linux или чужой компьютер без настройки</b>
+    <p>Выберите на устройстве <b>SETTINGS → Layout: Off</b>. Тогда PassPuck не трогает раскладку, и нужный язык вы включаете сами перед нажатием «Ввод». Пароль с русскими и латинскими буквами вперемешку в этом режиме набрать не получится.</p>
+  </div>
+</section>
+
+<section id="config">
+  <h2><span class="n">11</span>Пароли и названия профилей</h2>
+  <p>Профили 1–3 «автоматические»: пароль для них можно сгенерировать прямо на устройстве. Профили 4–6 «фиксированные»: пароль задаётся только в файле. Названия профилей на экране можно писать по-русски.</p>
+  <h3>Способ 1. Редактор (удобнее и надёжнее)</h3>
+  <p>Редактор лежит прямо на устройстве, ничего устанавливать не нужно. Работает в <b>Microsoft Edge</b> или <b>Google Chrome</b>, без интернета.</p>
+  <ol class="steps">
+    <li>Откройте диск устройства: <b>SETTINGS → Edit mode</b> → «Ввод» (<a href="#edit">раздел 13</a>).</li>
+    <li>На диске CIRCUITPY дважды кликните <code>PassPuck Editor.html</code>.</li>
+    <li>Нажмите <b>«Открыть устройство»</b>, выберите сам диск CIRCUITPY и разрешите браузеру изменять файлы.</li>
+    <li>Поменяйте названия и пароли. Кнопка «Создать» генерирует пароль: EN (буквы, цифры, символы) или RU (русские буквы и цифры) нужной длины. Глазик показывает пароль.</li>
+    <li><b>«Сохранить на устройство»</b> → дождитесь зелёного «Сохранено и проверено» → <b>подождите 10 секунд</b> → на устройстве <b>SETTINGS → Exit edit mode</b>.</li>
+  </ol>
+  <p>Редактор сам подсвечивает символы, которые устройство не сможет набрать, и не даёт сохранить такой файл. Перед сохранением прежняя версия файла копируется в <code>passwords.bak</code>.</p>
+  <h3>Способ 2. Вручную в Блокноте</h3>
+<pre><code>PROFILE_NAMES = {
+    1: "Рабочая почта",
+    2: "Ноутбук",
+    ...
+}
+
+AUTO_PASSWORDS = {
+    1: "пароль профиля 1",
+    2: "пароль профиля 2",
+    3: "пароль профиля 3",
+}
+
+MANUAL_PASSWORDS = {
+    4: "пароль профиля 4",
+    5: "пароль профиля 5",
+    6: "пароль профиля 6",
+}</code></pre>
+  <ul>
+    <li>Меняйте только текст внутри кавычек. Кавычки, двоеточия и запятые не трогайте.</li>
+    <li>Можно: латиница, цифры, символы английской клавиатуры, русские буквы (включая ё и №). Перед <code>"</code> и <code>\</code> ставьте обратный слэш: <code>\"</code> и <code>\\</code>.</li>
+    <li>Названия профилей: до 20 символов, иначе обрежутся на экране.</li>
+    <li>После сохранения <b>подождите 10 секунд</b>, прежде чем отключать устройство. Если выдернуть его сразу, файл может испортиться.</li>
+  </ul>
+  <div class="note ok">
+    <b class="t">Если файл всё-таки испортился</b>
+    <p>При включении устройство попробует резервную копию <code>passwords.bak</code> и покажет на экране <code>Backup loaded</code>. Если не читается ни один файл, будет <code>passwords.py ERROR</code>. Тогда откройте диск и запишите пароли заново редактором.</p>
+  </div>
+</section>
+
+<section id="controls">
+  <h2><span class="n">12</span>Управление и меню</h2>
+  <p>Главный экран листается по кругу: <b>профили 1–6 → JIGGLE → SETTINGS → профиль 1</b>.</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Действие</th><th>На главном экране</th><th>В меню</th></tr></thead>
+    <tbody>
+      <tr><td><b>«Вперёд»</b> / <b>«Назад»</b></td><td>Следующий / предыдущий экран</td><td>Следующий / предыдущий пункт</td></tr>
+      <tr><td><b>«Ввод»</b> коротко</td><td>Набрать пароль профиля. На JIGGLE — вкл/выкл. На SETTINGS — открыть меню</td><td>Выбрать пункт</td></tr>
+      <tr><td><b>«Ввод»</b> держать 1 с</td><td>Открыть меню профиля, JIGGLE или SETTINGS</td><td>Выйти из меню</td></tr>
+      <tr><td><b>«Назад» + «Вперёд»</b> держать 1 с</td><td colspan="2">Заблокировать компьютер (<kbd>Win</kbd>+<kbd>L</kbd>)</td></tr>
+    </tbody>
+  </table></div>
+  <p>«Вперёд» и «Назад» срабатывают в момент отпускания кнопки. Поэтому при блокировке Win+L профиль на экране не сдвигается.</p>
+
+  <div class="cols" style="margin-top:16px">
+    <div class="card">
+      <h4>Меню профиля</h4>
+      <ol>
+        <li><b>Gen Pass:</b> новый случайный пароль из 12 символов. Сначала спросит подтверждение («Ввод» — да, «Назад»/«Вперёд» — отмена), затем сохранит. Только профили 1–3</li>
+        <li><b>Show Pass:</b> показать пароль на 4 секунды</li>
+        <li><b>Enter: ON/OFF:</b> нажимать Enter после пароля</li>
+        <li><b>Ctrl first: ON/OFF:</b> перед паролем нажать Ctrl и подождать. Убирает заставку экрана блокировки Windows, включайте для пароля от Windows</li>
+        <li><b>Gen: EN/RU:</b> на каком алфавите генерировать пароль. EN — буквы, цифры, символы. RU — русские буквы и цифры</li>
+        <li><b>Exit</b></li>
+      </ol>
+      <p style="font-size:14px;color:var(--muted);margin:8px 0 0">Настройки 3–5 у каждого профиля свои и сохраняются после отключения.</p>
+    </div>
+    <div class="card">
+      <h4>Меню JIGGLE</h4>
+      <ul>
+        <li><b>Every:</b> как часто шевелить мышь: 30s → 1m → 2m → 5m → 10m. Выбирайте заметно меньше времени, через которое засыпает компьютер</li>
+        <li><b>Exit</b></li>
+      </ul>
+      <p style="font-size:14px;color:var(--muted);margin:8px 0 0">Курсор сдвигается на 1 пиксель и сразу возвращается, поэтому стоит на месте. Пока Jiggle включён, в правом нижнем углу экрана видна маленькая «мышка». В меню мышь не шевелится, при погасшем экране шевелится.</p>
+    </div>
+    <div class="card">
+      <h4>Меню SETTINGS</h4>
+      <ul>
+        <li><b>Sleep:</b> через сколько засыпать: 15s / 30s / 1m / 2m / 5m / Never</li>
+        <li><b>Style:</b> сон — Off (экран выключается), Stars, Bounce или Rain (анимации)</li>
+        <li><b>Screen:</b> яркость экрана Low / Mid / High</li>
+        <li><b>LED:</b> светодиод Off / Low / High</li>
+        <li><b>Layout:</b> Auto — устройство само переключает раскладку, Off — не трогает её (<a href="#windows">раздел 10</a>)</li>
+        <li><b>Preview:</b> уснуть прямо сейчас, чтобы посмотреть стиль сна</li>
+        <li><b>Edit mode / Exit edit mode:</b> перезапуск с открытым или скрытым диском (<a href="#edit">раздел 13</a>)</li>
+        <li><b>Exit</b></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Светодиод и сон</h4>
+      <ul style="list-style:none;padding-left:0">
+        <li><span class="led blue"></span>синий пульс — готово к работе</li>
+        <li><span class="led red"></span>красный — открыто меню</li>
+        <li><span class="led green"></span>зелёная вспышка — пароль набран</li>
+        <li><span class="led red"></span>красное мигание и <code>!!! ERROR !!!</code> на экране — ошибка, любая кнопка перезапустит</li>
+      </ul>
+      <p style="font-size:14px;color:var(--muted);margin:8px 0 0">Во сне первое нажатие любой кнопки только будит экран и больше ничего не делает.</p>
+    </div>
+  </div>
+</section>
+
+<section id="edit">
+  <h2><span class="n">13</span>Режим редактирования</h2>
+  <p>В обычном режиме диск CIRCUITPY скрыт от компьютера, чтобы пароли нельзя было просто скопировать. Чтобы поменять файлы, включите режим редактирования любым способом:</p>
+  <div class="cols">
+    <div class="card">
+      <h4>Из меню (без отключения кабеля)</h4>
+      <ol>
+        <li>SETTINGS → <b>Edit mode</b> → «Ввод» → «Ввод» для подтверждения.</li>
+        <li>Устройство перезапустится, и появится диск CIRCUITPY.</li>
+        <li>Чтобы выйти: <b>подождите 10 секунд после сохранения</b>, затем SETTINGS → <b>Exit edit mode</b>.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h4>Кнопкой «Назад» (работает всегда)</h4>
+      <ol>
+        <li>Отключите устройство от USB.</li>
+        <li>Зажмите <b>«Назад»</b> и, не отпуская, подключите USB.</li>
+        <li>Чтобы выйти: подождите 10 секунд после сохранения и переподключите без кнопок.</li>
+      </ol>
+    </div>
+  </div>
+  <div class="note warn">
+    <p>Пока диск открыт, устройство не может само записывать файлы. «Gen Pass» в этом режиме покажет <code>Edit mode: no save</code>. Генерируйте пароли в обычном режиме.</p>
+  </div>
+</section>
+
+<section id="tuning">
+  <h2><span class="n">14</span>Тонкая настройка</h2>
+  <p>Почти всё настраивается из меню. Остальное — в начале файла <code>code.py</code>, раздел «НАСТРОЙКИ», каждая строка там подписана по-русски.</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Настройка</th><th>Что меняет</th></tr></thead>
+    <tbody>
+      <tr><td><code>OLED_TYPE</code></td><td><code>"SH1106"</code> для экрана 1.3″, <code>"SSD1306"</code> для 0.96″</td></tr>
+      <tr><td><code>PASSWORD_LENGTH</code>, <code>CHARS</code></td><td>Длина и символы пароля для Gen Pass</td></tr>
+      <tr><td><code>TYPING_DELAY</code>, <code>TYPING_START_DELAY</code></td><td>Пауза между символами и пауза после Ctrl first</td></tr>
+      <tr><td><code>LANG_EN_HOTKEY</code>, <code>LANG_RU_HOTKEY</code>, <code>LANG_SWITCH_DELAY</code></td><td>Сочетания переключения раскладки и пауза после него</td></tr>
+      <tr><td><code>SLEEP_PRESETS</code>, <code>JIGGLE_PRESETS</code></td><td>Варианты времени сна и интервалов Jiggle в меню</td></tr>
+      <tr><td><code>SPLASH_TIME</code></td><td>Сколько секунд показывать заставку, 0 — не показывать</td></tr>
+      <tr><td><code>I2C_FREQUENCY</code></td><td>Скорость связи с экраном. Если на экране помехи — <code>100000</code></td></tr>
+    </tbody>
+  </table></div>
+  <h3>Если кнопки припаяны не к тем контактам</h3>
+  <p>Перепаивать не обязательно. Положите на устройство рядом с <code>code.py</code> файл <code>hardware_pins.py</code> только с теми кнопками, которые нужно поменять. Например, если перепутаны «Ввод» и «Вперёд»:</p>
+<pre><code>import board
+
+PIN_ENTER = board.GP8
+PIN_FWD = board.GP7</code></pre>
+  <p>Этот файл относится только к конкретному устройству: на другие его не копируйте. Сам <code>code.py</code> менять не нужно. Кнопку «Назад» так переназначать не стоит: её контакт GP6 прописан ещё и в <code>boot.py</code>.</p>
+</section>
+
+<section id="trouble">
+  <h2><span class="n">15</span>Если что-то не работает</h2>
+  <p><b>Сначала загляните в журнал.</b> Откройте диск (<a href="#edit">раздел 13</a>) и файл <code>log.txt</code> в Блокноте. Туда пишутся включения, ошибки, проблемы с паролями и смена настроек. Самих паролей в журнале нет.</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Что видно</th><th>Вероятная причина и что делать</th></tr></thead>
+    <tbody>
+      <tr><td>При зажатой BOOT не появляется диск RPI-RP2</td><td>Кабель «только для зарядки» или плохой порт. Возьмите другой кабель, подключите без хаба.</td></tr>
+      <tr><td>Плата не определяется, греется</td><td>Короткое замыкание по питанию. Сразу отключите и прозвоните 3V3–GND (<a href="#solder">раздел 7</a>).</td></tr>
+      <tr><td>Светодиод синий, экран чёрный</td><td>Перепутаны SDA и SCL, плохая пайка или нет питания экрана (<a href="#table">раздел 3</a>).</td></tr>
+      <tr><td>На экране мусор или картинка сдвинута</td><td>Не тот <code>OLED_TYPE</code> или помехи на шине: <code>I2C_FREQUENCY = 100000</code>.</td></tr>
+      <tr><td><code>!!! ERROR !!!</code> и красное мигание</td><td>Ошибка программы. Подробности в <code>log.txt</code>. Любая кнопка перезапустит устройство.</td></tr>
+      <tr><td><code>passwords.py ERROR</code> или <code>Backup loaded</code></td><td>Файл паролей испорчен. Перепишите его редактором (<a href="#config">раздел 11</a>).</td></tr>
+      <tr><td>Профили листаются сами или при каждом подключении появляется диск</td><td>Кнопка «нажата» всегда: провода на ножках одной пары (<a href="#buttons">раздел 5</a>) или замыкание на GND.</td></tr>
+      <tr><td>Кнопки делают не то («Ввод» листает)</td><td>Кнопки припаяны к другим контактам. Используйте <code>hardware_pins.py</code> (<a href="#tuning">раздел 14</a>).</td></tr>
+      <tr><td>Печатаются не те символы</td><td>Не настроены <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>1/2</kbd> в Windows (<a href="#windows">раздел 10</a>), либо это Mac/Linux — выберите Layout: Off.</td></tr>
+      <tr><td><code>Bad chars in P…</code></td><td>В пароле символ, который нельзя набрать (не латиница и не русская буква). Исправьте в редакторе.</td></tr>
+      <tr><td>На экране блокировки не хватает первого символа</td><td>Включите в меню профиля <b>Ctrl first</b>.</td></tr>
+      <tr><td>Русский пароль не проходит на экране входа</td><td>Скопируйте языковые настройки на экран приветствия через <code>intl.cpl</code> (<a href="#windows">раздел 10</a>).</td></tr>
+      <tr><td>Gen Pass пишет <code>Edit mode: no save</code></td><td>Устройство в режиме редактирования. Выйдите из него и повторите.</td></tr>
+      <tr><td>Компьютер всё равно засыпает при включённом Jiggle</td><td>Интервал Every больше или равен времени сна компьютера. Выберите меньше.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Если программа на устройстве испортилась целиком, прошейте его заново по <a href="#flash">разделу 8</a> из комплекта <code>PassPuck kit.zip</code>. Свои пароли перед этим сохраните.</p>
+</section>
+
+<section id="security">
+  <h2><span class="n">16</span>Безопасность</h2>
+  <ul>
+    <li>Пароли хранятся во флеш-памяти <b>открытым текстом</b>: в <code>passwords.py</code> и в предыдущей версии <code>passwords.bak</code>. Любой, кто знает про режим редактирования, может их прочитать. Обращайтесь с устройством как с ключами от квартиры.</li>
+    <li>«Show Pass» показывает пароль на экране. Не открывайте его при посторонних.</li>
+    <li>Устройство набирает пароль туда, где стоит курсор. Перед «Вводом» убедитесь, что курсор в поле пароля, а не в чате.</li>
+    <li>Журнал <code>log.txt</code> паролей не содержит. Редактор работает без интернета и никуда ничего не отправляет.</li>
+    <li>Быстро заблокировать компьютер: «Назад» + «Вперёд» на 1 секунду.</li>
+  </ul>
+</section>
+
+<footer>PassPuck 2.0 · Waveshare RP2040-Zero · CircuitPython 10.2.1 · OLED SH1106 1.3″ I2C, адрес 0x3C · шрифт Terminus (SIL OFL 1.1)</footer>
+</div>
+
+</body>
+</html>
