@@ -160,12 +160,12 @@ footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--line);font-si
 .chip-t{fill:var(--fg);font:600 12px var(--mono)}
 @media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
 </style>
-
 </head>
 <body>
+
 <div class="wrap">
 <header>
-  <div class="eyebrow">Инструкция по сборке, прошивке и работе · PassPuck 2.1</div>
+  <div class="eyebrow">Инструкция по сборке, прошивке и работе · PassPuck 2.2</div>
   <h1>PassPuck</h1>
   <p class="lead">Карманный менеджер паролей. Компьютер видит его как обычную USB-клавиатуру: выберите профиль кнопками, нажмите «Ввод», и устройство само наберёт пароль. Ещё PassPuck может не давать компьютеру уснуть и блокирует его сочетанием кнопок.</p>
   <ul class="specs">
@@ -207,7 +207,7 @@ footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--line);font-si
       <tr><td>Экран</td><td>OLED <b>1.3″ I2C</b> (на обороте надпись «1.30″ IIC», контроллер SH1106), 4 контакта. Подойдёт и 0.96″ SSD1306, но тогда нужна одна правка в коде (<a href="#tuning">раздел 14</a>)</td><td>1</td></tr>
       <tr><td>Кнопки</td><td>Тактовые кнопки без фиксации, 4 ножки (обычно 6×6 мм)</td><td>3</td></tr>
       <tr><td>Провод</td><td>Тонкий монтажный (МГТФ 0,07–0,12 мм² или аналог), лучше нескольких цветов</td><td>~50 см</td></tr>
-      <tr><td>Корпус</td><td>Файл <code>PassGen_full_case_rp2040.3mf</code> из папки <code>3_корпус</code> комплекта</td><td>1</td></tr>
+      <tr><td>Корпус</td><td>Файл <code>PassGen_full_case_rp2040.3mf</code> из папки <code>4_корпус</code> комплекта</td><td>1</td></tr>
       <tr><td>Кабель</td><td>USB-C с передачей данных (кабели «только для зарядки» не подойдут)</td><td>1</td></tr>
     </tbody>
   </table></div>
@@ -505,16 +505,20 @@ footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--line);font-si
 
 <section id="flash">
   <h2><span class="n">08</span>Прошивка</h2>
-  <p>Прошивка делается один раз на каждое устройство. Все нужные файлы лежат в комплекте <code>PassPuck kit.zip</code>: прошивка в папке <code>1_прошивка</code>, файлы для устройства в <code>2_на_устройство</code>.</p>
+  <p>Прошивка делается один раз на каждое устройство, и это <b>один файл</b>: <code>PassPuck-2.2.uf2</code> из комплекта <code>PassPuck kit.zip</code> (или со страницы Releases на GitHub). В нём сразу и CircuitPython, и все файлы PassPuck.</p>
   <div class="flow">
-    <div class="st"><div class="k">шаг 1</div><div class="h">Зажать BOOT</div><p>Держите кнопку BOOT на плате и вставьте USB. Затем отпустите.</p></div>
+    <div class="st"><div class="k">шаг 1</div><div class="h">Зажать BOOT</div><p>Держите кнопку BOOT на плате и вставьте USB. Затем отпустите. Совсем новая плата может открыться и без кнопки.</p></div>
     <div class="st"><div class="k">шаг 2</div><div class="h">Диск <span class="drive">RPI-RP2</span></div><p>В «Этом компьютере» появится новый диск, это загрузчик платы.</p></div>
-    <div class="st"><div class="k">шаг 3</div><div class="h">Скопировать .uf2</div><p>Скопируйте на него файл прошивки. Плата сама перезагрузится.</p></div>
-    <div class="st"><div class="k">шаг 4</div><div class="h">Диск <span class="drive">CIRCUITPY</span></div><p>Вместо RPI-RP2 появится CIRCUITPY. На него копируются файлы программы.</p></div>
+    <div class="st"><div class="k">шаг 3</div><div class="h">Перетащить .uf2</div><p>Перетащите на него <code>PassPuck-2.2.uf2</code> и подождите около 30 секунд.</p></div>
+    <div class="st"><div class="k">шаг 4</div><div class="h">Диск <span class="drive">CIRCUITPY</span></div><p>Плата перезагрузится сама. На экране «PassPuck setup», на компьютере диск с редактором паролей.</p></div>
   </div>
-  <p>Файл прошивки: <code>adafruit-circuitpython-waveshare_rp2040_zero-ru-10.2.1.uf2</code>.</p>
-  <h3>Какие файлы копировать на CIRCUITPY</h3>
-  <p>Всё содержимое папки <code>2_на_устройство</code> копируется в корень диска. Порядок важен: <code>boot.py</code> всегда последним.</p>
+  <p>Дальше — <a href="#first">раздел 9</a>.</p>
+  <div class="note warn">
+    <b class="t">Только для нового устройства</b>
+    <p><code>PassPuck-2.2.uf2</code> записывает всё заново, <b>и пароли тоже</b> — они станут пустыми. Работающее устройство обновляйте копированием файлов (ниже).</p>
+  </div>
+  <h3>Что лежит на диске CIRCUITPY</h3>
+  <p>Это для справки и для ручной установки: можно прошить только CircuitPython (<code>1_прошивка</code> в комплекте) и скопировать всё из <code>2_на_устройство</code> в корень диска. Порядок важен: <code>boot.py</code> всегда последним.</p>
 <div class="tree">CIRCUITPY/
 ├── lib/                   <span class="c"># библиотеки, папка целиком</span>
 ├── fonts/                 <span class="c"># шрифт с русскими буквами</span>
@@ -522,11 +526,13 @@ footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--line);font-si
 ├── passpuck.mpy           <span class="c"># сама программа, собранная заранее</span>
 ├── settings.py            <span class="c"># настройки, можно менять Блокнотом</span>
 ├── passwords.py           <span class="c"># пароли и названия профилей</span>
+├── words.txt              <span class="c"># словарь для паролей из слов</span>
 ├── PassPuck Editor.html   <span class="c"># редактор паролей</span>
 └── boot.py<span class="tag last">последним</span>
 
 <span class="c">Появятся сами:</span> log.txt  passwords.bak  boot_out.txt
-<span class="c">Не нужны:</span> .fseventsd  .Trashes  .Trash-1000  .metadata_never_index  settings.toml  sd/<span class="tag no">служебный мусор</span></div>
+<span class="c">Не нужны:</span> .fseventsd  .Trashes  .Trash-1000  sd/
+          .metadata_never_index  settings.toml<span class="tag no">служебный мусор</span></div>
   <div class="note warn">
     <b class="t">Почему boot.py последним</b>
     <p><code>boot.py</code> прячет диск CIRCUITPY при каждом включении. Если скопировать его раньше остальных файлов и плата перезагрузится, диск пропадёт. Тогда откройте его кнопкой «Назад» (<a href="#edit">раздел 13</a>) и докопируйте файлы.</p>
@@ -541,19 +547,37 @@ footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--line);font-si
 
 <section id="first">
   <h2><span class="n">09</span>Первый запуск</h2>
-  <p>Отключите плату от USB и подключите снова, <b>не нажимая кнопок</b>. Правильный результат выглядит так:</p>
+  <p>Пока в устройстве нет ни одного пароля, оно работает в режиме <b>первой настройки</b>:</p>
   <ul class="check">
     <li>на секунду появляется заставка <code>PassPuck</code> и номер версии;</li>
-    <li>затем главный экран: <code>Prof 1/6 [Auto]</code> и название профиля;</li>
+    <li>затем подсказка <code>PassPuck setup — Open disk CIRCUITPY — PassPuck Editor.html</code>;</li>
+    <li>на компьютере сам появляется диск CIRCUITPY;</li>
+    <li>внизу главного экрана надпись <code>Open Editor.html</code>.</li>
+  </ul>
+  <p>Откройте на диске <code>PassPuck Editor.html</code>, впишите или создайте пароли и сохраните (<a href="#config">раздел 11</a>). Подождите 10 секунд и переподключите устройство. Теперь оно в обычном режиме:</p>
+  <ul class="check">
+    <li>главный экран: номер профиля <code>1/6</code>, крупное название, внизу точки «где я»;</li>
     <li>светодиод медленно пульсирует синим;</li>
     <li>диск CIRCUITPY <b>не</b> появляется: так задумано, это защита.</li>
   </ul>
-  <p>Если в комплекте был пустой шаблон <code>passwords.py</code>, паролей пока нет: при нажатии «Ввод» устройство напишет <code>No password!</code>. Задайте их редактором (<a href="#config">раздел 11</a>).</p>
+  <div class="note ok">
+    <b class="t">Хочу создавать пароли прямо на устройстве</b>
+    <p>Вместо редактора выберите на устройстве <b>SETTINGS → Exit edit mode</b>. Оно запомнит это, перезапустится в обычном режиме, и пароли профилей 1–3 можно будет создать через <b>Gen Pass</b> (<a href="#controls">раздел 12</a>).</p>
+  </div>
 </section>
 
 <section id="windows">
   <h2><span class="n">10</span>Настройка Windows</h2>
   <p>Устройство набирает пароль, нажимая клавиши, а какая буква получится, решает раскладка Windows. Поэтому перед каждым паролем устройство само переключает раскладку сочетаниями клавиш. Эти сочетания нужно <b>один раз настроить на каждом компьютере</b>, где используется PassPuck.</p>
+  <h3>Одним щелчком</h3>
+  <p>Дважды щёлкните <code>Настроить Windows.cmd</code> из комплекта (папка <code>3_windows</code>) и отвечайте на вопросы. Скрипт:</p>
+  <ul>
+    <li>проверит, что в Windows есть английский и русский языки (русский предложит добавить);</li>
+    <li>назначит <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd> английскому и <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>2</kbd> русскому;</li>
+    <li>по желанию скопирует настройки на экран входа в Windows — Windows спросит разрешение администратора.</li>
+  </ul>
+  <p>Если сочетания не заработали сразу, выйдите из Windows и войдите снова.</p>
+  <h3>Вручную</h3>
   <ol class="steps">
     <li>Windows 11: <b>Параметры → Время и язык → Ввод → Дополнительные параметры клавиатуры → Сочетания клавиш для языков ввода</b>.</li>
     <li>Выберите строку с <b>английским</b> языком → «Сменить сочетание клавиш» → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd>.</li>
@@ -582,10 +606,24 @@ footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--line);font-si
     <li>Откройте диск устройства: <b>SETTINGS → Edit mode</b> → «Ввод» (<a href="#edit">раздел 13</a>).</li>
     <li>На диске CIRCUITPY дважды кликните <code>PassPuck Editor.html</code>.</li>
     <li>Нажмите <b>«Открыть устройство»</b>, выберите сам диск CIRCUITPY и разрешите браузеру изменять файлы.</li>
-    <li>Поменяйте названия и пароли. Кнопка «Создать» генерирует пароль: EN (буквы, цифры, символы) или RU (русские буквы и цифры) нужной длины. Глазик показывает пароль.</li>
+    <li>Поменяйте названия и пароли. Кнопка «Создать» генерирует пароль: EN (буквы, цифры, символы) или RU (русские буквы и цифры) нужной длины, «Слова» или «Слова RU» — запоминаемый пароль из двух слов (<a href="#words">ниже</a>). Глазик показывает пароль, а у пароля из слов — ещё и подсказку, как его запомнить.</li>
     <li><b>«Сохранить на устройство»</b> → дождитесь зелёного «Сохранено и проверено» → <b>подождите 10 секунд</b> → на устройстве <b>SETTINGS → Exit edit mode</b>.</li>
   </ol>
   <p>Редактор сам подсвечивает символы, которые устройство не сможет набрать, и не даёт сохранить такой файл. Перед сохранением прежняя версия файла копируется в <code>passwords.bak</code>.</p>
+  <h3 id="words">Пароли из слов</h3>
+  <p>Случайный пароль вроде <code>k#8Fq2!xZ…</code> надёжен, но запомнить его почти невозможно. Пароль из слов устройство тоже выбирает случайно, но из простых слов в 3–4 буквы: два слова, две цифры и символ.</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Вид</th><th>Вы помните</th><th>Вводится</th><th>Зачем</th></tr></thead>
+    <tbody>
+      <tr><td><b>Words</b></td><td>Кот Луна 47!</td><td><code>RjnKeyf47!</code></td><td>Русские слова, набранные в английской раскладке. Только латиница — подходит любому сайту. Вручную печатаете «котлуна», не переключая раскладку</td></tr>
+      <tr><td><b>Words RU</b></td><td>Кот Луна 47!</td><td><code>КотЛуна47!</code></td><td>Те же слова русскими буквами. Символ в конце (<code>! % * + - =</code>) стоит на той же клавише в обеих раскладках, поэтому весь пароль набирается на русской</td></tr>
+    </tbody>
+  </table></div>
+  <p>Слова берутся из файла <code>words.txt</code> на устройстве (467 слов). Его можно открыть Блокнотом: удалить слова, которые не нравятся, или добавить свои — по одному на строке, 3–4 буквы, без букв ж х ъ э б ю ё. «Show Pass» у пароля Words показывает под ним русскую подсказку.</p>
+  <div class="note warn">
+    <b class="t">Насколько это надёжно</b>
+    <p>Вариантов такого пароля — около 130–175 миллионов. Для входа в Windows этого с запасом: после 10 неверных попыток Windows блокирует вход. Для почты, банка и важных сайтов лучше обычный случайный пароль EN.</p>
+  </div>
   <h3>Способ 2. Вручную в Блокноте</h3>
 <pre><code>PROFILE_NAMES = {
     1: "Рабочая почта",
@@ -618,30 +656,39 @@ MANUAL_PASSWORDS = {
 
 <section id="controls">
   <h2><span class="n">12</span>Управление и меню</h2>
-  <p>Главный экран листается по кругу: <b>профили 1–6 → JIGGLE → SETTINGS → профиль 1</b>.</p>
+  <p>Главный экран листается по кругу: <b>профили 1–6 → JIGGLE → SETTINGS → профиль 1</b>. После включения устройство открывает профиль, которым вы пользовались последним.</p>
+  <h3>Главный экран профиля</h3>
+  <ul>
+    <li>слева вверху — номер профиля, например <code>2/6</code>;</li>
+    <li>справа вверху — значки: <code>ENT</code> (после пароля нажимается Enter), <code>CTL</code> (Ctrl first) — видны, только когда включены, и вид генерации <code>EN</code> / <code>RU</code> / <code>Words</code> / <code>Words RU</code> (профили 1–3);</li>
+    <li>в центре — название профиля, крупно, если оно не длиннее 10 символов;</li>
+    <li>внизу — 8 точек «где я»: кружки — профили, квадраты — JIGGLE и SETTINGS. Если у профиля нет пароля, вместо точек написано <code>No password!</code>.</li>
+  </ul>
   <div class="tbl-wrap"><table>
     <thead><tr><th>Действие</th><th>На главном экране</th><th>В меню</th></tr></thead>
     <tbody>
       <tr><td><b>«Вперёд»</b> / <b>«Назад»</b></td><td>Следующий / предыдущий экран</td><td>Следующий / предыдущий пункт</td></tr>
+      <tr><td><b>«Вперёд»</b> / <b>«Назад»</b> держать</td><td colspan="2">Листать само, пока кнопку не отпустите (примерно 4 шага в секунду)</td></tr>
       <tr><td><b>«Ввод»</b> коротко</td><td>Набрать пароль профиля. На JIGGLE — вкл/выкл. На SETTINGS — открыть меню</td><td>Выбрать пункт</td></tr>
       <tr><td><b>«Ввод»</b> держать 1 с</td><td>Открыть меню профиля, JIGGLE или SETTINGS</td><td>Выйти из меню</td></tr>
       <tr><td><b>«Назад» + «Вперёд»</b> держать 1 с</td><td colspan="2">Заблокировать компьютер (<kbd>Win</kbd>+<kbd>L</kbd>)</td></tr>
     </tbody>
   </table></div>
-  <p>«Вперёд» и «Назад» срабатывают в момент отпускания кнопки. Поэтому при блокировке Win+L профиль на экране не сдвигается.</p>
+  <p>«Вперёд» и «Назад» срабатывают в момент отпускания кнопки. Поэтому при блокировке Win+L профиль на экране не сдвигается — нажимайте обе кнопки почти одновременно.</p>
+  <p>Меню показывает 4 пункта списком: выбранный выделен белой полосой, значения настроек — справа, вверху — номер пункта, сбоку — полоска прокрутки. Каждое меню открывается на том пункте, где вы его закрыли. Выйти можно пунктом <b>Exit</b> или долгим «Вводом» с любого пункта.</p>
 
   <div class="cols" style="margin-top:16px">
     <div class="card">
       <h4>Меню профиля</h4>
       <ol>
-        <li><b>Gen Pass:</b> новый случайный пароль из 12 символов. Сначала спросит подтверждение («Ввод» — да, «Назад»/«Вперёд» — отмена), затем сохранит. Только профили 1–3</li>
-        <li><b>Show Pass:</b> показать пароль на 4 секунды</li>
+        <li><b>Show Pass:</b> показать пароль на 4 секунды (пароль из слов — 6 секунд, с подсказкой)</li>
+        <li><b>Gen type:</b> какой пароль создавать: EN — буквы, цифры, символы; RU — русские буквы и цифры; Words и Words RU — из двух слов (<a href="#words">раздел 11</a>). Только профили 1–3</li>
+        <li><b>Gen Pass:</b> создать новый пароль выбранного вида. Сначала спросит подтверждение («Ввод» — да, «Назад»/«Вперёд» — отмена), сохранит и сразу покажет его. Только профили 1–3</li>
         <li><b>Enter: ON/OFF:</b> нажимать Enter после пароля</li>
         <li><b>Ctrl first: ON/OFF:</b> перед паролем нажать Ctrl и подождать. Убирает заставку экрана блокировки Windows, включайте для пароля от Windows</li>
-        <li><b>Gen: EN/RU:</b> на каком алфавите генерировать пароль. EN — буквы, цифры, символы. RU — русские буквы и цифры</li>
         <li><b>Exit</b></li>
       </ol>
-      <p style="font-size:14px;color:var(--muted);margin:8px 0 0">Настройки 3–5 у каждого профиля свои и сохраняются после отключения.</p>
+      <p style="font-size:14px;color:var(--muted);margin:8px 0 0">Gen type, Enter и Ctrl first у каждого профиля свои и сохраняются после отключения.</p>
     </div>
     <div class="card">
       <h4>Меню JIGGLE</h4>
@@ -710,7 +757,9 @@ MANUAL_PASSWORDS = {
     <thead><tr><th>Настройка</th><th>Что меняет</th></tr></thead>
     <tbody>
       <tr><td><code>OLED_TYPE</code></td><td><code>"SH1106"</code> для экрана 1.3″, <code>"SSD1306"</code> для 0.96″</td></tr>
-      <tr><td><code>PASSWORD_LENGTH</code>, <code>CHARS</code></td><td>Длина и символы пароля для Gen Pass</td></tr>
+      <tr><td><code>PASSWORD_LENGTH</code>, <code>CHARS</code></td><td>Длина и символы пароля EN для Gen Pass</td></tr>
+      <tr><td><code>WORDS_SYMBOLS</code>, <code>WORDS_RU_SYMBOLS</code></td><td>Из каких символов выбирается последний символ пароля Words и Words RU (сами слова — в <code>words.txt</code>)</td></tr>
+      <tr><td><code>NAV_REPEAT_DELAY</code>, <code>NAV_REPEAT_INTERVAL</code></td><td>Через сколько секунд удержания «Вперёд»/«Назад» листают сами и с какой скоростью</td></tr>
       <tr><td><code>TYPING_DELAY</code>, <code>TYPING_START_DELAY</code></td><td>Пауза между символами и пауза после Ctrl first</td></tr>
       <tr><td><code>LANG_EN_HOTKEY</code>, <code>LANG_RU_HOTKEY</code>, <code>LANG_SWITCH_DELAY</code></td><td>Сочетания переключения раскладки и пауза после него</td></tr>
       <tr><td><code>SLEEP_PRESETS</code>, <code>JIGGLE_PRESETS</code></td><td>Варианты времени сна и интервалов Jiggle в меню</td></tr>
@@ -743,17 +792,20 @@ PIN_FWD = board.GP7</code></pre>
       <tr><td><code>!!! ERROR !!!</code> и красное мигание</td><td>Ошибка программы. Подробности в <code>log.txt</code>. Любая кнопка перезапустит устройство.</td></tr>
       <tr><td>Экран не включается, светодиод мигает красным «два коротких — пауза»</td><td>Не загрузился <code>passpuck.mpy</code>: другая версия CircuitPython или файл не скопирован. Прошейте плату из комплекта и скопируйте файлы заново (<a href="#flash">раздел 8</a>). Причина записана в <code>log.txt</code>.</td></tr>
       <tr><td><code>passwords.py ERROR</code> или <code>Backup loaded</code></td><td>Файл паролей испорчен. Перепишите его редактором (<a href="#config">раздел 11</a>).</td></tr>
-      <tr><td>Профили листаются сами или при каждом подключении появляется диск</td><td>Кнопка «нажата» всегда: провода на ножках одной пары (<a href="#buttons">раздел 5</a>) или замыкание на GND.</td></tr>
+      <tr><td>После прошивки <code>PassPuck-2.2.uf2</code> на диске только <code>code.py</code>, <code>lib</code>, <code>sd</code> — редактора нет</td><td>Файл записался не целиком. Снова зажмите BOOT, подключите и перетащите файл ещё раз; дождитесь, пока диск RPI-RP2 исчезнет сам.</td></tr>
+      <tr><td>При каждом подключении появляется диск и надпись <code>Open Editor.html</code></td><td>Так и задумано, пока нет ни одного пароля (<a href="#first">раздел 9</a>). Задайте пароли или выберите SETTINGS → Exit edit mode.</td></tr>
+      <tr><td>Профили листаются сами или при каждом подключении появляется диск (а пароли есть)</td><td>Кнопка «нажата» всегда: провода на ножках одной пары (<a href="#buttons">раздел 5</a>) или замыкание на GND.</td></tr>
       <tr><td>Кнопки делают не то («Ввод» листает)</td><td>Кнопки припаяны к другим контактам. Используйте <code>hardware_pins.py</code> (<a href="#tuning">раздел 14</a>).</td></tr>
       <tr><td>Печатаются не те символы</td><td>Не настроены <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>1/2</kbd> в Windows (<a href="#windows">раздел 10</a>), либо это Mac/Linux — выберите Layout: Off.</td></tr>
       <tr><td><code>Bad chars in P…</code></td><td>В пароле символ, который нельзя набрать (не латиница и не русская буква). Исправьте в редакторе.</td></tr>
       <tr><td>На экране блокировки не хватает первого символа</td><td>Включите в меню профиля <b>Ctrl first</b>.</td></tr>
-      <tr><td>Русский пароль не проходит на экране входа</td><td>Скопируйте языковые настройки на экран приветствия через <code>intl.cpl</code> (<a href="#windows">раздел 10</a>).</td></tr>
+      <tr><td>Русский пароль не проходит на экране входа</td><td>Скопируйте языковые настройки на экран приветствия: <code>Настроить Windows.cmd</code> или <code>intl.cpl</code> (<a href="#windows">раздел 10</a>).</td></tr>
+      <tr><td>Gen Pass в режиме Words пишет <code>No words.txt</code></td><td>На устройстве нет словаря или в нём меньше 100 слов. Скопируйте <code>words.txt</code> из комплекта.</td></tr>
       <tr><td>Gen Pass пишет <code>Edit mode: no save</code></td><td>Устройство в режиме редактирования. Выйдите из него и повторите.</td></tr>
       <tr><td>Компьютер всё равно засыпает при включённом Jiggle</td><td>Интервал Every больше или равен времени сна компьютера. Выберите меньше.</td></tr>
     </tbody>
   </table></div>
-  <p>Если программа на устройстве испортилась целиком, прошейте его заново по <a href="#flash">разделу 8</a> из комплекта <code>PassPuck kit.zip</code>. Свои пароли перед этим сохраните.</p>
+  <p>Если программа на устройстве испортилась целиком, прошейте его заново файлом <code>PassPuck-2.2.uf2</code> (<a href="#flash">раздел 8</a>). Пароли при этом станут пустыми — если диск ещё открывается, сначала скопируйте себе <code>passwords.py</code>.</p>
 </section>
 
 <section id="security">
@@ -767,7 +819,7 @@ PIN_FWD = board.GP7</code></pre>
   </ul>
 </section>
 
-<footer>PassPuck 2.1 · Waveshare RP2040-Zero · CircuitPython 10.2.1 · OLED SH1106 1.3″ I2C, адрес 0x3C · шрифт Terminus (SIL OFL 1.1)</footer>
+<footer>PassPuck 2.2 · Waveshare RP2040-Zero · CircuitPython 10.2.1 · OLED SH1106 1.3″ I2C, адрес 0x3C · шрифт Terminus (SIL OFL 1.1)</footer>
 </div>
 
 </body>

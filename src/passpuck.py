@@ -40,9 +40,9 @@ from adafruit_hid.keyboard_layout_us import KeyboardLayoutUS
 from adafruit_hid.keycode import Keycode
 from adafruit_display_text import label
 from adafruit_display_shapes.line import Line
-from adafruit_display_shapes.triangle import Triangle
 from adafruit_display_shapes.circle import Circle
 from adafruit_display_shapes.roundrect import RoundRect
+from adafruit_display_shapes.rect import Rect
 
 
 # =====================================================================
@@ -51,7 +51,7 @@ from adafruit_display_shapes.roundrect import RoundRect
 #  Если какой-то строки в settings.py нет — используется значение отсюда.
 # =====================================================================
 
-VERSION = "2.1"
+VERSION = "2.2"
 
 # Тип экрана. Оставьте раскомментированной ОДНУ строку:
 OLED_TYPE = "SH1106"      # экран 1.3"
@@ -69,10 +69,17 @@ PROFILE_NAMES = {
 }
 
 # Генератор паролей (Gen Pass, профили 1-3).
-# Алфавит выбирается для каждого профиля в его меню: «Gen: EN» — символы из CHARS,
-# «Gen: RU» — русские буквы и цифры.
-PASSWORD_LENGTH = 12      # длина нового пароля
+# Вид пароля выбирается для каждого профиля в его меню (пункт «Gen»):
+#   EN    — случайные символы из CHARS;
+#   RU    — случайные русские буквы и цифры;
+#   Words — запоминаемый: два русских слова из WORDS_FILE, набранные в английской
+#           раскладке, плюс 2 цифры и символ. Например, «Кот Луна 47!» вводится как RjnKeyf47!
+#   Words RU — те же слова русскими буквами: КотЛуна47!
+PASSWORD_LENGTH = 12      # длина нового пароля EN и RU
 CHARS ="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-="
+WORDS_FILE = "/words.txt" # словарь для Words: одно слово на строке
+WORDS_SYMBOLS = "!#$%&*?@" # из них выбирается символ в конце пароля Words
+WORDS_RU_SYMBOLS = "!%*+-=" # ... и Words RU (эти символы одинаковы в обеих раскладках)
 
 # Сон экрана. Выбирается прямо на устройстве: пункт SETTINGS на главном экране.
 SLEEP_PRESETS = (15, 30, 60, 120, 300, 0)   # варианты «Sleep», секунды. 0 = никогда
@@ -102,6 +109,8 @@ TYPING_DELAY = 0.05       # пауза между символами при на
 TYPING_START_DELAY = 0.4  # пауза перед набором: экран блокировки Windows успевает «проснуться»
 LONG_PRESS_TIME = 1.0     # сколько держать «Ввод», чтобы открыть меню
 NAV_LOCK_HOLD_TIME = 1.0  # сколько держать «Назад»+«Вперёд» для блокировки ПК (Win+L)
+NAV_REPEAT_DELAY = 0.5    # держите «Назад» или «Вперёд» дольше — листает само
+NAV_REPEAT_INTERVAL = 0.25  # ... с такой паузой между шагами, сек
 
 # Jiggle: как часто шевелить мышь. Выбирается на устройстве: JIGGLE → долгий «Ввод» → Every.
 # Windows обычно засыпает после 5-10 минут бездействия, поэтому интервал должен быть меньше.
@@ -318,6 +327,19 @@ RU_KEYMAP["№"] = (Keycode.THREE, True)
 RU_GEN_CHARS = _RU_LETTERS + _RU_LETTERS_UPPER + "0123456789"
 DIGITS = "0123456789"
 
+# Виды пароля для Gen Pass (номер хранится в памяти настроек, см. NVM_GEN_MODE)
+GEN_MODES = ("EN", "RU", "Words", "Words RU")
+GEN_WORDS = 2             # номера видов «из слов» в GEN_MODES
+GEN_WORDS_RU = 3
+# Цифры и эти символы стоят на одних и тех же клавишах в русской и английской
+# раскладке — для них раскладку не переключаем
+LAYOUT_NEUTRAL = "0123456789!%*()_-+= "
+# Words: русская буква → английская буква на той же клавише (й → q, ц → w, ...).
+# Только буквы, которые и в английской раскладке буквы (без х ъ ж э б ю ё).
+_WORD_LETTERS = "йцукенгшщзфывапролдячсмить"
+_WORD_KEYS = "qwertyuiopasdfghjklzxcvbnm"
+WORDS_MIN = 100           # меньше слов в словаре — пароль слишком лёгкий, не генерируем
+
 
 def char_lang(c):
     """"en" — символ английской клавиатуры, "ru" — русская буква, None — набрать нельзя."""
@@ -424,21 +446,137 @@ def generate_password(chars):
     return "".join(result)
 
 
+def random_below(n):
+    """Случайное число от 0 до n-1 (n не больше 65536), все с равной вероятностью."""
+    limit = 65536 - (65536 % n)
+    while True:
+        b = os.urandom(2)
+        v = (b[0] << 8) | b[1]
+        if v < limit:
+            return v % n
+
+
+def is_word(text):
+    """Подходит ли строка словаря: 3 или 4 русские буквы из _WORD_LETTERS
+    (короткие слова — пароль легче запомнить)."""
+    if not 3 <= len(text) <= 4:
+        return False
+    for c in text:
+        if c not in _WORD_LETTERS:
+            return False
+    return True
+
+
+def dictionary_words():
+    """Слова словаря по одному. Весь файл в память не загружается.
+    Неподходящие строки (комментарии, длинные слова, буквы ж х ъ э б ю ё) пропускаются."""
+    with open(WORDS_FILE, "r") as f:
+        for line in f:
+            w = line.strip()
+            if is_word(w):
+                yield w
+
+
+_words_count = None       # сколько слов в словаре (считается один раз)
+
+
+def words_count():
+    global _words_count
+    if _words_count is None:
+        n = 0
+        for _ in dictionary_words():
+            n += 1
+        _words_count = n
+    return _words_count
+
+
+def word_to_keys(word):
+    """«кот» → «Rjn»: те же клавиши в английской раскладке, первая буква заглавная."""
+    keys = "".join(_WORD_KEYS[_WORD_LETTERS.index(c)] for c in word)
+    return keys[0].upper() + keys[1:]
+
+
+def word_title_ru(word):
+    """«кот» → «Кот» (upper() в CircuitPython не знает кириллицу)."""
+    return _RU_LETTERS_UPPER[_RU_LETTERS.index(word[0])] + word[1:]
+
+
+def generate_words_password(russian=False):
+    """Пароль из двух разных случайных слов, 2 цифр и символа.
+    Words: «Кот Луна 47!» → RjnKeyf47!   Words RU (russian=True): КотЛуна47!
+    None — словаря нет или в нём меньше WORDS_MIN слов."""
+    try:
+        total = words_count()
+    except OSError:
+        total = 0
+    if total < WORDS_MIN:
+        return None
+    a = random_below(total)
+    b = random_below(total - 1)
+    if b >= a:
+        b += 1                # второе слово всегда другое
+    picked = {}
+    for i, w in enumerate(dictionary_words()):
+        if i == a or i == b:
+            picked[i] = w
+    digits = DIGITS[random_below(10)] + DIGITS[random_below(10)]
+    symbols = WORDS_RU_SYMBOLS if russian else WORDS_SYMBOLS
+    symbol = symbols[random_below(len(symbols))]
+    convert = word_title_ru if russian else word_to_keys
+    return convert(picked[a]) + convert(picked[b]) + digits + symbol
+
+
+def words_hint(pw):
+    """Подсказка для запоминания пароля из слов: «RjnKeyf47!» → «Кот Луна 47!».
+    None — пароль не из слов словаря (обычный случайный, введённый вручную и т.п.)."""
+    parts = []
+    i = 0
+    while i < len(pw) and "A" <= pw[i] <= "Z":
+        j = i + 1
+        while j < len(pw) and "a" <= pw[j] <= "z":
+            j += 1
+        parts.append(pw[i:j].lower())
+        i = j
+    tail = pw[i:]
+    if len(parts) < 2 or any(c.isalpha() for c in tail):
+        return None
+    words = []
+    for part in parts:
+        w = ""
+        for c in part:
+            k = _WORD_KEYS.find(c)
+            if k < 0:
+                return None
+            w += _WORD_LETTERS[k]
+        words.append(w)
+    missing = set(words)
+    try:
+        for w in dictionary_words():
+            missing.discard(w)
+    except OSError:
+        return None
+    if missing:
+        return None
+    return " ".join(word_title_ru(w) for w in words) + (" " + tail if tail else "")
+
+
 # =====================================================================
 #  4. ПАМЯТЬ НАСТРОЕК (NVM) — не стирается при отключении и перепрошивке файлов
 #  Байты 0-3: метка "PWD6" (память размечена)
 #  Байты 4-15: по 2 байта на профиль: Auto Enter и запасной байт
 #              (раньше там был Shift+1, теперь не используется)  (P1: 4-5, ... P6: 14-15)
-#  Байт 16: Jiggle, байт 17: запасной (раньше Random, теперь не используется)
+#  Байт 16: Jiggle, байт 17: последний профиль (с него начинается работа после включения)
 #  Байты 18-19: счётчик включений (для журнала)
 #  Байты 20-25: «Ctrl first» по профилям (P1: 20, ... P6: 25)
 #  Байт 26: через сколько засыпать (номер в SLEEP_PRESETS), байт 27: стиль сна
 #  Байт 28: как часто Jiggle (номер в JIGGLE_PRESETS)
 #  Байт 29: яркость экрана, байт 30: яркость светодиода (номера в списках яркости)
-#  Байты 31-36: алфавит Gen Pass по профилям (1 = RU, иначе EN)  (P1: 31, ... P6: 36)
+#  Байты 31-36: вид пароля Gen Pass по профилям (0 = EN, 1 = RU, 2 = Words)  (P1: 31, ... P6: 36)
 #  Байт 38: переключение раскладки (1 = Off, иначе Auto)
 #  Байт 37: одноразовая отметка «следующее включение — режим редактирования»
 #           (ставит пункт SETTINGS → Edit mode, стирает boot.py)
+#  Байт 39: первая настройка через редактор пропущена (SETTINGS → Exit edit mode
+#           на новом устройстве) — boot.py больше не открывает диск сам
 #  Значение 1 = включено, всё остальное = выключено.
 # =====================================================================
 
@@ -446,6 +584,7 @@ nvm = microcontroller.nvm
 NVM_MAGIC = b"PWD6"
 NVM_USED = 39
 NVM_JIGGLE = 16
+NVM_LAST_PROFILE = 17
 NVM_BOOT_COUNTER = 18
 NVM_CTRL_FIRST = 20
 NVM_SLEEP_PRESET = 26
@@ -453,10 +592,11 @@ NVM_SLEEP_STYLE = 27
 NVM_JIGGLE_PRESET = 28
 NVM_SCREEN_BRIGHTNESS = 29
 NVM_LED_BRIGHTNESS = 30
-NVM_GEN_RU = 31
+NVM_GEN_MODE = 31
 NVM_EDIT_FLAG = 37        # если менять — поменяйте и в boot.py
 EDIT_FLAG_VALUE = 0xA5
 NVM_LAYOUT_OFF = 38
+NVM_SETUP_SKIPPED = 39    # если менять — поменяйте и в boot.py
 
 
 def nvm_prepare():
@@ -483,13 +623,27 @@ def save_brightness(screen, led):
     nvm[NVM_SCREEN_BRIGHTNESS:NVM_LED_BRIGHTNESS + 1] = bytes([screen, led])
 
 
-def load_gen_ru(profile):
-    """Генерировать ли для профиля русский пароль (иначе английский)."""
-    return nvm[NVM_GEN_RU + profile - 1] == 1
+def load_last_profile():
+    p = nvm[NVM_LAST_PROFILE]
+    return p if 1 <= p <= TOTAL_PROFILES else 1
 
 
-def save_gen_ru(profile, enabled):
-    nvm[NVM_GEN_RU + profile - 1] = 1 if enabled else 0
+def remember_profile():
+    """Запоминает текущий профиль, чтобы после включения начать с него.
+    Пишем, только если он изменился: частая перезапись изнашивает память настроек,
+    поэтому вызывается не при каждом листании, а при наборе пароля и засыпании."""
+    if nvm[NVM_LAST_PROFILE] != current_profile:
+        nvm[NVM_LAST_PROFILE] = current_profile
+
+
+def load_gen_mode(profile):
+    """Какой пароль генерировать для профиля: номер в GEN_MODES (0 = EN)."""
+    mode = nvm[NVM_GEN_MODE + profile - 1]
+    return mode if mode < len(GEN_MODES) else 0
+
+
+def save_gen_mode(profile, mode):
+    nvm[NVM_GEN_MODE + profile - 1] = mode
 
 
 def load_layout_auto():
@@ -619,10 +773,23 @@ empty_splash = None
 title_label = None
 pass_label = None
 bottom_label = None
-icons_group = None
-arrow_left = None
-center_circle = None
-arrow_right = None
+icons_group = None        # нижняя строка: точки «где я» (6 профилей, JIGGLE, SETTINGS)
+nav_dots = []
+badge_enter = None        # значки в верхней строке профиля: ENT, CTL и вид Gen
+badge_ctrl = None
+gen_badge = None
+bottom_line = None        # линия над нижней строкой (в меню-списке убирается)
+menu_group = None         # меню списком: см. init_display и draw_menu
+menu_highlight = None
+menu_names = []
+menu_values = []
+menu_scroll = None
+menu_scroll_track = None
+menu_counter = None
+MENU_ROWS = 4             # сколько строк меню видно сразу
+MENU_ROW_W = 121          # ширина строки (справа — полоска прокрутки)
+MENU_THUMB = 10           # высота бегунка полоски прокрутки
+menu_memory = {}          # на каком пункте закрыли каждое меню (до выключения)
 jiggle_icon = None
 
 
@@ -668,7 +835,7 @@ class MiddleLine:
     def _cyr_label(self):
         if self.cyr is None and load_main_font():
             self.cyr = label.Label(main_font, text="", color=0xFFFFFF,
-                                   x=self.ascii.x, y=self.ascii.y)
+                                   x=self.ascii.x, y=self.ascii.y, scale=self.ascii.scale)
             self.cyr.hidden = True
             self.group.append(self.cyr)
         return self.cyr
@@ -718,11 +885,25 @@ class MiddleLine:
         if self.cyr is not None:
             self.cyr.y = value
 
+    @property
+    def scale(self):
+        return self.ascii.scale
+
+    @scale.setter
+    def scale(self, value):
+        # Меняем только если отличается: смена размера перерисовывает надпись
+        if self.ascii.scale != value:
+            self.ascii.scale = value
+        if self.cyr is not None and self.cyr.scale != value:
+            self.cyr.scale = value
+
 
 def init_display():
     """Запускает экран и рисует интерфейс. Ошибки здесь обычно значат проблему с проводами экрана."""
     global display, splash, empty_splash, title_label, pass_label, bottom_label
-    global icons_group, arrow_left, center_circle, arrow_right, jiggle_icon
+    global icons_group, nav_dots, badge_enter, badge_ctrl, gen_badge, jiggle_icon
+    global bottom_line, menu_group, menu_highlight, menu_names, menu_values
+    global menu_scroll, menu_scroll_track, menu_counter
 
     displayio.release_displays()
     try:
@@ -754,15 +935,59 @@ def init_display():
     splash.append(Line(0, 14, 128, 14, color=0xFFFFFF))
     # Средняя строка (названия, пароли, меню): сама выбирает шрифт, см. MiddleLine
     pass_label = MiddleLine(splash)
-    splash.append(Line(0, 48, 128, 48, color=0xFFFFFF))
+    bottom_line = Line(0, 48, 128, 48, color=0xFFFFFF)
+    splash.append(bottom_line)
 
+    # Меню списком: 4 строки (название слева, значение справа), выбранная — белой
+    # полосой, справа полоска прокрутки, вверху справа «номер/всего»
+    menu_group = displayio.Group()
+    menu_highlight = Rect(0, 15, MENU_ROW_W, 12, fill=0xFFFFFF)
+    menu_group.append(menu_highlight)
+    menu_names = []
+    menu_values = []
+    for row in range(MENU_ROWS):
+        y = 21 + row * 12
+        name = label.Label(terminalio.FONT, text="", color=0xFFFFFF, x=3, y=y)
+        value = label.Label(terminalio.FONT, text="", color=0xFFFFFF, y=y)
+        menu_group.append(name)
+        menu_group.append(value)
+        menu_names.append(name)
+        menu_values.append(value)
+    menu_scroll_track = Line(125, 15, 125, 63, color=0xFFFFFF)
+    menu_group.append(menu_scroll_track)
+    menu_scroll = Rect(124, 15, 3, MENU_THUMB, fill=0xFFFFFF)
+    menu_group.append(menu_scroll)
+    menu_counter = label.Label(terminalio.FONT, text="", color=0xFFFFFF, y=6)
+    menu_group.append(menu_counter)
+    menu_group.hidden = True
+    splash.append(menu_group)
+
+    # Верхняя строка профиля: справа значки ENT (Auto Enter) и CTL (Ctrl first) —
+    # видны, когда включены, — и вид пароля для Gen Pass (EN / RU / Words)
+    def make_badge(text):
+        g = displayio.Group(y=1)
+        g.append(Rect(0, 0, len(text) * 6 + 3, 11, fill=0xFFFFFF))
+        g.append(label.Label(terminalio.FONT, text=text, color=0x000000, x=2, y=5))
+        g.hidden = True
+        splash.append(g)
+        return g
+    badge_enter = make_badge("ENT")
+    badge_ctrl = make_badge("CTL")
+    gen_badge = label.Label(terminalio.FONT, text="", color=0xFFFFFF, y=6)
+    splash.append(gen_badge)
+
+    # Нижняя строка: точки «где я». Кружки — профили, квадраты — JIGGLE и SETTINGS.
+    # Закрашена текущая.
     icons_group = displayio.Group()
-    arrow_left = Triangle(22, 51, 12, 56, 22, 61, fill=0xFFFFFF, outline=0xFFFFFF)
-    center_circle = Circle(64, 56, 4, fill=0xFFFFFF, outline=0xFFFFFF)
-    arrow_right = Triangle(106, 51, 116, 56, 106, 61, fill=0xFFFFFF, outline=0xFFFFFF)
-    icons_group.append(arrow_left)
-    icons_group.append(center_circle)
-    icons_group.append(arrow_right)
+    nav_dots = []
+    for i in range(MAIN_MENU_ITEMS):
+        cx = 64 - (MAIN_MENU_ITEMS - 1) * 4 + i * 8
+        if i < TOTAL_PROFILES:
+            dot = Circle(cx, 56, 2, fill=None, outline=0xFFFFFF)
+        else:
+            dot = Rect(cx - 2, 54, 5, 5, fill=None, outline=0xFFFFFF)
+        nav_dots.append(dot)
+        icons_group.append(dot)
     splash.append(icons_group)
 
     bottom_label = label.Label(terminalio.FONT, text="", color=0xFFFFFF, x=5, y=56)
@@ -778,16 +1003,70 @@ def init_display():
     init_sleep_animations()
 
 
+def set_menu_view(visible):
+    """Меню списком или обычный экран (средняя строка между двумя линиями)."""
+    menu_group.hidden = not visible
+    bottom_line.hidden = visible
+    if visible:
+        pass_label.text = ""
+
+
+def draw_menu(title, items):
+    """Рисует меню списком. items — пары (название, значение); выбран пункт menu_index.
+    Видно MENU_ROWS строк, выбранная — белой полосой, над ней видна одна строка."""
+    set_menu_view(True)
+    title_label.text = title
+    title_label.x = 1
+    count = len(items)
+    menu_counter.text = "{}/{}".format(menu_index + 1, count)
+    menu_counter.x = 123 - len(menu_counter.text) * 6
+    first = min(max(menu_index - 1, 0), max(count - MENU_ROWS, 0))
+    for row in range(MENU_ROWS):
+        i = first + row
+        name, value = items[i] if i < count else ("", "")
+        color = 0x000000 if i == menu_index else 0xFFFFFF
+        menu_names[row].text = name
+        menu_names[row].color = color
+        menu_values[row].text = value
+        menu_values[row].color = color
+        menu_values[row].x = MENU_ROW_W - 2 - len(value) * 6
+    menu_highlight.y = 15 + (menu_index - first) * 12
+    # Полоска прокрутки: бегунок показывает, где выбранный пункт в списке.
+    # Если всё помещается на экран — полоска не нужна.
+    scroll_needed = count > MENU_ROWS
+    menu_scroll.hidden = menu_scroll_track.hidden = not scroll_needed
+    if scroll_needed:
+        menu_scroll.y = 15 + (48 - MENU_THUMB) * menu_index // (count - 1)
+
+
 def set_centered_text(label_obj, text):
     """Пишет одну строку текста по центру экрана (6 пикселей на символ)."""
     if label_obj is pass_label:
+        set_menu_view(False)              # сообщение поверх меню — меню прячем
+        label_obj.scale = 1
         label_obj.y = 31
     label_obj.text = text
     label_obj.x = max(0, (128 - len(text) * 6) // 2)
 
 
+def set_name_text(text):
+    """Название профиля на главном экране: крупно, если помещается (до 10 символов),
+    иначе обычным размером."""
+    big = len(text) <= 10
+    pass_label.scale = 2 if big else 1
+    pass_label.y = 31
+    pass_label.text = text
+    pass_label.x = max(0, (128 - len(text) * (12 if big else 6)) // 2)
+
+
+def hide_badges():
+    badge_enter.hidden = True
+    badge_ctrl.hidden = True
+    gen_badge.text = ""
+
+
 def set_bottom_mode(show_text=False):
-    """Низ экрана: стрелки-подсказки или строка текста."""
+    """Низ экрана: точки «где я» или строка текста."""
     if show_text:
         icons_group.hidden = True
         jiggle_icon.hidden = True
@@ -800,6 +1079,7 @@ def set_bottom_mode(show_text=False):
 
 def show_message(title, text, bottom=None):
     """Временное сообщение на экране."""
+    hide_badges()
     set_centered_text(title_label, title)
     set_centered_text(pass_label, text)
     if bottom:
@@ -870,7 +1150,7 @@ layout_auto = True        # SETTINGS → Layout: Auto (переключать р
 led_brightness = BRIGHTNESS_DEFAULT
 auto_enter_enabled = False
 ctrl_first_enabled = False
-gen_ru_enabled = False
+gen_mode = 0              # вид пароля Gen Pass для текущего профиля (номер в GEN_MODES)
 mouse_jiggle_enabled = False
 jiggle_preset = JIGGLE_DEFAULT_PRESET
 last_mouse_jiggle_time = 0.0
@@ -950,15 +1230,20 @@ def get_current_password():
     return passwords.get(current_profile, "")
 
 
+def no_passwords_at_all():
+    """Новое устройство: не задано ни одного пароля."""
+    return passwords_source is not None and not any(passwords.values())
+
+
 def type_password():
     """Набирает пароль текущего профиля. Сам пароль в журнал не пишется."""
     password = get_current_password()
     if not password:
-        show_message(title_label.text, "No password!")
+        show_message("Profile {}".format(current_profile), "No password!")
         time.sleep(1)
         return
     if not is_typable(password):
-        show_message(title_label.text, "Bad chars in P{}".format(current_profile))
+        show_message("Profile {}".format(current_profile), "Bad chars in P{}".format(current_profile))
         log("Набор P{} отменён: в пароле недопустимые символы.".format(current_profile))
         time.sleep(1.5)
         return
@@ -977,8 +1262,9 @@ def type_password():
             # перед каждым куском русских или английских символов.
             current_lang = None
             for char in password:
-                if char in DIGITS:
-                    # цифры одинаковые в обеих раскладках — раскладку не трогаем
+                if char in LAYOUT_NEUTRAL:
+                    # цифры и символы ! % * ( ) - _ = + одинаковые в обеих раскладках —
+                    # раскладку не трогаем
                     layout.write(char)
                     if TYPING_DELAY > 0:
                         time.sleep(TYPING_DELAY)
@@ -1028,6 +1314,7 @@ def type_password():
                 kbd.send(Keycode.CAPS_LOCK)
             except Exception:
                 pass
+    remember_profile()
     flash_green()
     set_centered_text(pass_label, "Done!")
     time.sleep(0.5)
@@ -1035,16 +1322,27 @@ def type_password():
 
 def show_password():
     """Показывает пароль на 4 секунды. Длинный пароль — в две строки.
+    Пароль из слов — 6 секунд, а под ним по-русски, как его запомнить.
     Без шрифта с кириллицей русские буквы показываются как «?»."""
     pw = get_current_password() or "No password!"
-    if len(pw) > 21:
+    hint = words_hint(pw)
+    seconds = 6 if hint else 4
+    set_menu_view(False)
+    pass_label.scale = 1
+    if hint:
+        width = max(len(pw), len(hint))
+        pass_label.y = 25
+        pass_label.text = (" " * ((width - len(pw)) // 2) + pw + "\n"
+                           + " " * ((width - len(hint)) // 2) + hint)
+        pass_label.x = max(0, (128 - width * 6) // 2)
+    elif len(pw) > 21:
         pass_label.y = 25
         pass_label.text = pw[:21] + "\n" + pw[21:42]
         pass_label.x = 2
     else:
         set_centered_text(pass_label, pw)
     set_bottom_mode(show_text=True)
-    for seconds_left in range(4, 0, -1):
+    for seconds_left in range(seconds, 0, -1):
         set_centered_text(bottom_label, "Hiding in {}s...".format(seconds_left))
         t_start = time.monotonic()
         while time.monotonic() - t_start < 1.0:
@@ -1086,14 +1384,23 @@ def gen_pass_flow():
         set_centered_text(pass_label, "Edit mode: no save")
         time.sleep(1.5)
         return
-    lang = "RU" if gen_ru_enabled else "EN"
-    if not ask_confirm("Gen Pass P{} {}?".format(p, lang), "Enter = YES"):
+    if not ask_confirm("Gen Pass P{} {}?".format(p, GEN_MODES[gen_mode]), "Enter = YES"):
         show_message("Gen Pass P{}".format(p), "Cancelled")
         time.sleep(0.7)
         return
 
+    if gen_mode in (GEN_WORDS, GEN_WORDS_RU):
+        new = generate_words_password(russian=gen_mode == GEN_WORDS_RU)
+        if new is None:
+            log("Gen Pass P{}: словарь {} не найден или в нём меньше {} слов.".format(
+                p, WORDS_FILE, WORDS_MIN))
+            show_message("Gen Pass P{}".format(p), "No words.txt", "Old pass kept")
+            time.sleep(2.5)
+            return
+    else:
+        new = generate_password(RU_GEN_CHARS if gen_mode == 1 else CHARS)
     old = passwords[p]
-    passwords[p] = generate_password(RU_GEN_CHARS if gen_ru_enabled else CHARS)
+    passwords[p] = new
     show_message("Gen Pass P{}".format(p), "Saving...")
     error = save_passwords()
     if error:
@@ -1105,18 +1412,23 @@ def gen_pass_flow():
         log("Gen Pass P{}: новый пароль сгенерирован и сохранён.".format(p))
         show_message("Gen Pass P{}".format(p), "Generated & Saved!")
         time.sleep(1)
+        show_password()             # сразу показываем новый пароль, чтобы его запомнить
         in_menu = False
 
 
 def update_ui():
     """Перерисовывает главный экран или меню по текущему состоянию."""
     set_bottom_mode(show_text=False)
+    hide_badges()
     on_jiggle = main_menu_index == JIGGLE_ITEM
     on_settings = main_menu_index == SETTINGS_ITEM
     jiggle_icon.hidden = in_menu or not mouse_jiggle_enabled
 
     if not in_menu:
-        arrow_left.fill = center_circle.fill = arrow_right.fill = 0xFFFFFF
+        set_menu_view(False)
+        icons_group.hidden = False
+        for i, dot in enumerate(nav_dots):
+            dot.fill = 0xFFFFFF if i == main_menu_index else None
         if on_jiggle:
             set_centered_text(title_label, "=== JIGGLE ===")
             set_centered_text(pass_label, "Jiggle {} | {}".format(
@@ -1127,42 +1439,65 @@ def update_ui():
             set_centered_text(pass_label, "Sleep {} | {}".format(
                 sleep_preset_label(), SLEEP_STYLES[sleep_style]))
         else:
-            prof_type = "Auto" if current_profile <= 3 else "Manual"
-            set_centered_text(title_label, "Prof {}/{} [{}]".format(current_profile, TOTAL_PROFILES, prof_type))
-            set_centered_text(pass_label, profile_names.get(current_profile, "Profile {}".format(current_profile)))
+            # Слева «1/6», справа значки: ENT, CTL (если включены) и вид Gen (профили 1-3)
+            title_label.text = "{}/{}".format(current_profile, TOTAL_PROFILES)
+            title_label.x = 1
+            right = 128
+            if current_profile <= 3:
+                gen_badge.text = GEN_MODES[gen_mode]
+                gen_badge.x = right - len(gen_badge.text) * 6
+                right = gen_badge.x - 3
+            for badge, on in ((badge_ctrl, ctrl_first_enabled), (badge_enter, auto_enter_enabled)):
+                badge.hidden = not on
+                if on:
+                    badge.x = right - 21
+                    right = badge.x - 3
+            set_name_text(profile_names.get(current_profile, "Profile {}".format(current_profile)))
+            # Пароля нет или его нельзя набрать — сразу говорим об этом внизу
+            pw = get_current_password()
+            if no_passwords_at_all():
+                warning = "Open Editor.html"    # новое устройство: диск открыт для редактора
+            elif not pw:
+                warning = "No password!"
+            else:
+                warning = "Bad chars!" if not is_typable(pw) else None
+            if warning:
+                set_bottom_mode(show_text=True)
+                set_centered_text(bottom_label, warning)
     else:
-        arrow_left.fill = center_circle.fill = arrow_right.fill = 0x000000
+        icons_group.hidden = True
+        # Пункт Exit напоминает, что выйти можно и долгим нажатием «Ввод»
+        exit_item = ("Exit", "hold Enter")
         if on_jiggle:
-            set_centered_text(title_label, "=== JIGGLE ===")
+            title = "JIGGLE"
             items = [
-                "Every: " + seconds_label(JIGGLE_PRESETS[jiggle_preset]),
-                "Exit",
+                ("Every", seconds_label(JIGGLE_PRESETS[jiggle_preset])),
+                exit_item,
             ]
         elif on_settings:
-            set_centered_text(title_label, "=== SETTINGS ===")
+            title = "SETTINGS"
             items = [
-                "Sleep: " + sleep_preset_label(),
-                "Style: " + SLEEP_STYLES[sleep_style],
-                "Preview",
-                "Screen: " + SCREEN_BRIGHTNESS[screen_brightness][0],
-                "LED: " + LED_BRIGHTNESS[led_brightness][0],
-                "Layout: " + ("Auto" if layout_auto else "Off"),
-                "Edit mode" if FS_WRITABLE else "Exit edit mode",
-                "Exit",
+                ("Sleep", sleep_preset_label()),
+                ("Style", SLEEP_STYLES[sleep_style]),
+                ("Preview", ""),
+                ("Screen", SCREEN_BRIGHTNESS[screen_brightness][0]),
+                ("LED", LED_BRIGHTNESS[led_brightness][0]),
+                ("Layout", "Auto" if layout_auto else "Off"),
+                ("Edit mode" if FS_WRITABLE else "Exit edit mode", ""),
+                exit_item,
             ]
         else:
-            set_centered_text(title_label, "=== MENU (P{}) ===".format(current_profile))
+            # Порядок по смыслу: сначала то, что нужно чаще; вид пароля — перед Gen Pass
+            title = "P{} MENU".format(current_profile)
             items = [
-                "1.Gen Pass",
-                "2.Show Pass",
-                "3.Enter: " + ("ON" if auto_enter_enabled else "OFF"),
-                "4.Ctrl first: " + ("ON" if ctrl_first_enabled else "OFF"),
-                "5.Gen: " + (("RU" if gen_ru_enabled else "EN") if current_profile <= 3 else "-"),
-                "6.Exit",
+                ("Show Pass", ""),
+                ("Gen type", GEN_MODES[gen_mode] if current_profile <= 3 else "-"),
+                ("Gen Pass", ""),
+                ("Enter", "ON" if auto_enter_enabled else "OFF"),
+                ("Ctrl first", "ON" if ctrl_first_enabled else "OFF"),
+                exit_item,
             ]
-        pass_label.x = 5
-        pass_label.y = 31
-        pass_label.text = "> " + items[menu_index]
+        draw_menu(title, items)
 
 
 def sleep_preset_label():
@@ -1195,6 +1530,7 @@ def go_to_sleep(preview=False):
     global is_sleeping, in_menu, menu_index, main_menu_index
     is_sleeping = True
     if not preview:
+        remember_profile()
         in_menu = False
         menu_index = 0
         main_menu_index = current_profile - 1
@@ -1819,15 +2155,23 @@ def handle_lock_combo():
 
 
 def nav_press(btn, other, step):
-    """«Назад» / «Вперёд»: листаем, когда кнопку ОТПУСТИЛИ.
-    Если, пока кнопка зажата, нажали вторую — это комбинация блокировки (Win+L),
-    и листание не выполняется."""
+    """«Назад» / «Вперёд»: короткое нажатие листает, когда кнопку ОТПУСТИЛИ.
+    Если держать дольше NAV_REPEAT_DELAY — листает само, пока кнопку не отпустят.
+    Если, пока кнопка зажата, нажали вторую — это комбинация блокировки (Win+L)."""
+    next_step = time.monotonic() + NAV_REPEAT_DELAY
+    repeated = False
     while pressed(btn):
         if pressed(other):
             handle_lock_combo()
             return
+        now = time.monotonic()
+        if now >= next_step:
+            navigate(step)
+            repeated = True
+            next_step = now + NAV_REPEAT_INTERVAL
         tick()
-    navigate(step)
+    if not repeated:
+        navigate(step)
     time.sleep(BUTTON_DEBOUNCE)
 
 
@@ -1841,10 +2185,15 @@ def wait_enter():
     return "short"
 
 
+def menu_key():
+    """Какое меню открыто: у профилей одно общее, у JIGGLE и SETTINGS — свои."""
+    return main_menu_index if main_menu_index >= TOTAL_PROFILES else "profile"
+
+
 def navigate(step):
     """«Вперёд» (+1) или «Назад» (-1): листаем профили или пункты меню."""
     global main_menu_index, menu_index, current_profile, auto_enter_enabled
-    global ctrl_first_enabled, gen_ru_enabled
+    global ctrl_first_enabled, gen_mode
     if in_menu:
         if main_menu_index == JIGGLE_ITEM:
             count = 2
@@ -1853,13 +2202,14 @@ def navigate(step):
         else:
             count = 6
         menu_index = (menu_index + step) % count
+        menu_memory[menu_key()] = menu_index
     else:
         main_menu_index = (main_menu_index + step) % MAIN_MENU_ITEMS
         if main_menu_index < TOTAL_PROFILES:
             current_profile = main_menu_index + 1
             auto_enter_enabled = load_auto_enter(current_profile)
             ctrl_first_enabled = load_ctrl_first(current_profile)
-            gen_ru_enabled = load_gen_ru(current_profile)
+            gen_mode = load_gen_mode(current_profile)
     update_ui()
 
 
@@ -1868,7 +2218,7 @@ def on_enter(press):
     global in_menu, menu_index, mouse_jiggle_enabled
     global jiggle_preset
     global auto_enter_enabled, ctrl_first_enabled, sleep_preset, sleep_style
-    global screen_brightness, led_brightness, gen_ru_enabled, layout_auto
+    global screen_brightness, led_brightness, gen_mode, layout_auto
     on_jiggle = main_menu_index == JIGGLE_ITEM
     on_settings = main_menu_index == SETTINGS_ITEM
 
@@ -1876,7 +2226,7 @@ def on_enter(press):
     if not in_menu:
         if press == "long" or on_settings:          # SETTINGS открывается любым нажатием
             in_menu = True
-            menu_index = 0
+            menu_index = menu_memory.get(menu_key(), 0)   # там, где закрыли в прошлый раз
             update_ui()
             update_led()
         elif on_jiggle:
@@ -1941,28 +2291,28 @@ def on_enter(press):
         return
 
     # ---------- меню профиля ----------
-    if press == "long" or menu_index == 5:          # долгое нажатие или «6.Exit»
+    if press == "long" or menu_index == 5:          # долгое нажатие или Exit
         in_menu = False
-    elif menu_index == 0:                           # 1.Gen Pass
-        gen_pass_flow()
-    elif menu_index == 1:                           # 2.Show Pass
+    elif menu_index == 0:                           # Show Pass
         show_password()
-    elif menu_index == 2:                           # 3.Enter: ON/OFF
+    elif menu_index == 2:                           # Gen Pass
+        gen_pass_flow()
+    elif menu_index == 3:                           # Enter: ON/OFF
         auto_enter_enabled = not auto_enter_enabled
         save_auto_enter(current_profile, auto_enter_enabled)
         log("P{}: Enter -> {}".format(current_profile, "ON" if auto_enter_enabled else "OFF"))
-    elif menu_index == 3:                           # 4.Ctrl first: ON/OFF
+    elif menu_index == 4:                           # Ctrl first: ON/OFF
         ctrl_first_enabled = not ctrl_first_enabled
         save_ctrl_first(current_profile, ctrl_first_enabled)
         log("P{}: Ctrl first -> {}".format(current_profile, "ON" if ctrl_first_enabled else "OFF"))
-    elif menu_index == 4:                           # 5.Gen: EN/RU
+    elif menu_index == 1:                           # Gen type: EN/RU/Words
         if current_profile > 3:
             set_centered_text(pass_label, "Fixed Profile!")
             time.sleep(1)
         else:
-            gen_ru_enabled = not gen_ru_enabled
-            save_gen_ru(current_profile, gen_ru_enabled)
-            log("P{}: Gen -> {}".format(current_profile, "RU" if gen_ru_enabled else "EN"))
+            gen_mode = (gen_mode + 1) % len(GEN_MODES)
+            save_gen_mode(current_profile, gen_mode)
+            log("P{}: Gen -> {}".format(current_profile, GEN_MODES[gen_mode]))
     update_ui()
     update_led()
 
@@ -1979,6 +2329,11 @@ def edit_mode_flow():
         # Компьютер мог ещё не дописать файлы на флешку — предупреждаем
         if not ask_confirm("Exit edit mode?", "Wait 10s after save", "Enter=YES Back=NO"):
             return
+        if no_passwords_at_all():
+            # Новое устройство, а пароли решили создавать прямо на нём (Gen Pass):
+            # запоминаем, чтобы boot.py больше не открывал диск сам
+            nvm[NVM_SETUP_SKIPPED] = EDIT_FLAG_VALUE
+            log("Первая настройка через редактор пропущена.")
     show_message("PassPuck", "Restarting...")
     time.sleep(0.5)
     microcontroller.reset()
@@ -2018,7 +2373,7 @@ def startup():
     global boot_number, auto_enter_enabled, ctrl_first_enabled, sleep_preset, sleep_style
     global mouse_jiggle_enabled
     global jiggle_preset, last_activity_time, screen_brightness, led_brightness
-    global gen_ru_enabled, layout_auto
+    global gen_mode, layout_auto, current_profile, main_menu_index
 
     nvm_prepare()
     boot_number = nvm_next_boot_number()
@@ -2037,9 +2392,11 @@ def startup():
     show_splash()
     init_hid()
 
+    current_profile = load_last_profile()      # начинаем с профиля, которым пользовались
+    main_menu_index = current_profile - 1
     auto_enter_enabled = load_auto_enter(current_profile)
     ctrl_first_enabled = load_ctrl_first(current_profile)
-    gen_ru_enabled = load_gen_ru(current_profile)
+    gen_mode = load_gen_mode(current_profile)
     mouse_jiggle_enabled = load_jiggle_enabled()
     sleep_preset, sleep_style = load_sleep_settings()
     jiggle_preset = load_jiggle_preset()
@@ -2060,6 +2417,11 @@ def startup():
     elif passwords_source != PASSWORDS_FILE:
         show_message("! PASSWORDS !", "Backup loaded", "see log.txt")
         time.sleep(3)
+    elif no_passwords_at_all():
+        # Первая настройка: boot.py уже открыл диск — подсказываем, что делать
+        log("Паролей ещё нет: первая настройка, диск CIRCUITPY открыт.")
+        show_message("PassPuck setup", "Open disk CIRCUITPY", "PassPuck Editor.html")
+        time.sleep(4)
     update_ui()
 
 

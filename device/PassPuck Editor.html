@@ -105,6 +105,15 @@ const RU_UPPER = "ЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБ
 const RU_SET = new Set((RU_LOWER + RU_UPPER + "ёЁ№").split(""));
 const RU_GEN_CHARS = RU_LOWER + RU_UPPER + "0123456789";
 const NAME_MAX = 20;
+// Пароль из слов (как Gen: Words на устройстве): русская буква → английская на той же клавише
+const WORD_LETTERS = "йцукенгшщзфывапролдячсмить";
+const WORD_KEYS = "qwertyuiopasdfghjklzxcvbnm";
+const WORD_SYMBOLS = "!#$%&*?@";
+const WORD_RU_SYMBOLS = "!%*+-=";   // одинаковы в русской и английской раскладке
+const LAYOUT_NEUTRAL = "0123456789!%*()_-+= ";  // для них устройство раскладку не переключает
+const WORDS_MIN = 100;
+let WORDS = [];           // словарь words.txt с устройства
+let WORD_SET = new Set();
 
 let dirHandle = null;
 let data = null;          // {names:{}, passwords:{}}
@@ -128,7 +137,8 @@ function analyze(text) {
   const bad = new Set();
   for (const c of text) {
     const k = charKind(c);
-    if (k === "en") en = true; else if (k === "ru") ru = true; else bad.add(c);
+    if (k === "en") { if (!LAYOUT_NEUTRAL.includes(c)) en = true; }
+    else if (k === "ru") ru = true; else bad.add(c);
   }
   return {en, ru, bad: [...bad]};
 }
@@ -212,6 +222,74 @@ function randomFrom(chars, length) {
   return out.join("");
 }
 
+function isWord(w) {
+  return w.length >= 3 && w.length <= 4 && [...w].every(c => WORD_LETTERS.includes(c));
+}
+
+function randomBelow(n) {
+  const limit = 65536 - (65536 % n);
+  for (;;) {
+    const v = crypto.getRandomValues(new Uint16Array(1))[0];
+    if (v < limit) return v % n;
+  }
+}
+
+function wordToKeys(w) {
+  const k = [...w].map(c => WORD_KEYS[WORD_LETTERS.indexOf(c)]).join("");
+  return k[0].toUpperCase() + k.slice(1);
+}
+
+function titleRu(w) { return w[0].toUpperCase() + w.slice(1); }
+
+// russian = false: «Кот Луна 47!» → RjnKeyf47!   russian = true: КотЛуна47!
+function wordsPassword(russian) {
+  const a = randomBelow(WORDS.length);
+  let b = randomBelow(WORDS.length - 1);
+  if (b >= a) b++;
+  const conv = russian ? titleRu : wordToKeys;
+  const symbols = russian ? WORD_RU_SYMBOLS : WORD_SYMBOLS;
+  return conv(WORDS[a]) + conv(WORDS[b]) + randomBelow(10) + randomBelow(10)
+    + symbols[randomBelow(symbols.length)];
+}
+
+// «RjnKeyf47!» → «Кот Луна 47!»; null — пароль не из слов словаря
+function wordsHint(pw) {
+  const m = /^((?:[A-Z][a-z]*){2,})([^A-Za-z]*)$/.exec(pw);
+  if (!m) return null;
+  const words = [];
+  for (const part of m[1].match(/[A-Z][a-z]*/g)) {
+    let w = "";
+    for (const c of part.toLowerCase()) {
+      const k = WORD_KEYS.indexOf(c);
+      if (k < 0) return null;
+      w += WORD_LETTERS[k];
+    }
+    if (!WORD_SET.has(w)) return null;
+    words.push(w);
+  }
+  return words.map(w => w[0].toUpperCase() + w.slice(1)).join(" ") + (m[2] ? " " + m[2] : "");
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function memoChip(n) {
+  if ($("pw" + n).type !== "text") return "";   // подсказку видно, только когда пароль открыт
+  const h = wordsHint(data.passwords[n]);
+  return h ? `<span class="chip ru">запомнить: ${escapeHtml(h)}</span>` : "";
+}
+
+async function loadWords(handle) {
+  try {
+    const text = await readText(handle, "words.txt");
+    WORDS = text.split(/\r?\n/).map(s => s.trim()).filter(isWord);
+  } catch {
+    WORDS = [];
+  }
+  WORD_SET = new Set(WORDS);
+}
+
 function chipsFor(text, isName) {
   const a = analyze(text);
   const c = [];
@@ -236,7 +314,7 @@ function refreshState() {
   $("dirty").hidden = !dirty;
   $("saveBtn").disabled = !dirty || hasErrors();
   for (const n of PROFILES) {
-    $("pwchips" + n).innerHTML = chipsFor(data.passwords[n], false);
+    $("pwchips" + n).innerHTML = chipsFor(data.passwords[n], false) + memoChip(n);
     $("namechips" + n).innerHTML = chipsFor(data.names[n], true);
   }
 }
@@ -251,10 +329,10 @@ function render() {
           <button type="button" id="eye${n}" aria-label="Показать пароль">👁</button></div>
           <div class="chips" id="pwchips${n}"></div></td>
       <td><div class="gen">
-          <select id="lang${n}" aria-label="Алфавит"><option value="en">EN</option><option value="ru">RU</option></select>
+          <select id="lang${n}" aria-label="Алфавит"><option value="en">EN</option><option value="ru">RU</option><option value="words">Слова</option><option value="wordsru">Слова RU</option></select>
           <input type="number" id="len${n}" min="4" max="64" value="12" aria-label="Длина">
           <button type="button" id="gen${n}">Создать</button></div>
-          <div class="hint">EN: буквы, цифры, символы. RU: русские буквы и цифры.</div></td>
+          <div class="hint">EN: буквы, цифры, символы. RU: русские буквы и цифры. Слова: два слова + 2 цифры + символ — легко запомнить (вводятся в английской раскладке). Слова RU: то же русскими буквами.</div></td>
     </tr>`).join("");
   $("rows").innerHTML = rows;
   for (const n of PROFILES) {
@@ -264,11 +342,21 @@ function render() {
     $("pw" + n).addEventListener("input", e => { data.passwords[n] = e.target.value; refreshState(); });
     $("eye" + n).addEventListener("click", () => {
       const f = $("pw" + n); f.type = f.type === "password" ? "text" : "password";
+      refreshState();
     });
+    $("lang" + n).addEventListener("change", e => { $("len" + n).disabled = e.target.value.startsWith("words"); });
     $("gen" + n).addEventListener("click", () => {
-      const len = Math.max(4, Math.min(64, parseInt($("len" + n).value, 10) || 12));
-      const chars = $("lang" + n).value === "ru" ? RU_GEN_CHARS : EN_CHARS;
-      data.passwords[n] = randomFrom(chars, len);
+      const mode = $("lang" + n).value;
+      if (mode.startsWith("words")) {
+        if (WORDS.length < WORDS_MIN) {
+          showMsg("bad", "На устройстве нет словаря <b>words.txt</b> (или в нём меньше " + WORDS_MIN + " слов). Скопируйте его из комплекта PassPuck.");
+          return;
+        }
+        data.passwords[n] = wordsPassword(mode === "wordsru");
+      } else {
+        const len = Math.max(4, Math.min(64, parseInt($("len" + n).value, 10) || 12));
+        data.passwords[n] = randomFrom(mode === "ru" ? RU_GEN_CHARS : EN_CHARS, len);
+      }
       $("pw" + n).value = data.passwords[n];
       $("pw" + n).type = "text";
       refreshState();
@@ -306,10 +394,11 @@ $("openBtn").addEventListener("click", async () => {
     catch (e) {
       showMsg("bad", "Не удалось прочитать passwords.py (" + e.message + "). Файл повреждён: можно заполнить профили заново и сохранить.");
       data = {names: {...DEFAULT_NAMES}, passwords: {1:"",2:"",3:"",4:"",5:"",6:""}};
-      dirHandle = h; savedSnapshot = ""; render(); return;
+      dirHandle = h; savedSnapshot = ""; await loadWords(h); render(); return;
     }
     dirHandle = h;
     savedSnapshot = buildFile(data);
+    await loadWords(h);
     showMsg("ok", "Устройство открыто. Меняйте названия и пароли, затем нажмите «Сохранить на устройство».");
     render();
   } catch (e) {
