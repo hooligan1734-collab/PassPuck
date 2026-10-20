@@ -13,6 +13,7 @@
 - Крупное название профиля, значки его настроек, меню списком, листание удержанием кнопки, запоминание последнего профиля
 - Автонажатие Enter, «Ctrl first» для экрана блокировки Windows
 - Блокировка компьютера сочетанием кнопок (Win+L)
+- **Пульт для музыки и видео** (включается в SETTINGS → Media): пауза, треки, громкость — работает в любом плеере, YouTube, Spotify
 - **Jiggle** — не даёт компьютеру уснуть (курсор сдвигается на 1 пиксель и сразу обратно)
 - Сон экрана: выключение или одна из 11 анимаций (Stars, Bounce, Rain, Eyes, Fireworks, Snake, Matrix, Pulse, Warp, Snow, Lock) либо Mix — анимации сменяют друг друга
 - Яркость экрана и светодиода, заставка при включении, режим редактирования из меню
@@ -41,17 +42,17 @@
 
 ## Быстрый старт
 
-Скачайте со страницы [Releases](../../releases) файл **`PassPuck-2.2.uf2`** — в нём прошивка и все файлы сразу.
+Скачайте со страницы [Releases](../../releases) файл **`PassPuck-2.3.uf2`** — в нём прошивка и все файлы сразу.
 
 1. Зажмите **BOOT** на плате и подключите USB — появится диск `RPI-RP2` (совсем новая плата может открыть его и без кнопки).
-2. Перетащите на него `PassPuck-2.2.uf2` и подождите около 30 секунд.
+2. Перетащите на него `PassPuck-2.3.uf2` и подождите около 30 секунд.
 3. Устройство само откроется как диск `CIRCUITPY`, на экране — «PassPuck setup». Откройте на диске `PassPuck Editor.html` в Edge или Chrome, впишите пароли (или нажмите «Создать»), сохраните, подождите 10 секунд и переподключите устройство.
    Хотите создавать пароли прямо на устройстве — выберите вместо этого **SETTINGS → Exit edit mode**.
 4. На каждом компьютере с Windows один раз запустите **`Настроить Windows.cmd`** (папка `windows/`, есть и в архиве PassPuck kit).
 
 Пароли потом меняются так: **SETTINGS → Edit mode** (или подключить с зажатой «Назад») — снова появится диск с редактором.
 
-**Обновление** работающего устройства (пароли сохранятся): откройте диск в режиме редактирования и скопируйте всё из `device/`, **кроме `passwords.py` и `settings.py`** (в них ваши пароли и настройки). `boot.py` — последним. Файл `hardware_pins.py`, если он есть, не удаляйте. **Не прошивайте** работающее устройство файлом `PassPuck-2.2.uf2` — он заменит пароли пустыми.
+**Обновление** работающего устройства (пароли сохранятся): откройте диск в режиме редактирования и скопируйте всё из `device/`, **кроме `passwords.py` и `settings.py`** (в них ваши пароли и настройки). `boot.py` — последним. Файл `hardware_pins.py`, если он есть, не удаляйте. **Не прошивайте** работающее устройство файлом `PassPuck-2.3.uf2` — он заменит пароли пустыми.
 
 ### Настройка Windows
 
@@ -104,8 +105,8 @@ examples/   hardware_pins.py — если кнопки припаяны к др�
 
 ## English summary
 
-**PassPuck** is a pocket hardware password manager built on a Waveshare RP2040-Zero running CircuitPython. It acts as a USB keyboard: pick a profile with the buttons, press Enter, and it types the password. Features: 6 profiles with on-device generation (random EN/RU or memorable two-word passwords typed in either layout), Latin and Cyrillic passwords (automatic Windows layout switching via Ctrl+Shift+1/2), auto-Enter, Win+L lock, mouse jiggler, 11 sleep animations plus Mix, list menus, brightness settings, an offline browser-based password editor stored on the device itself, a diagnostic log, and all tunables in `settings.py`.
+**PassPuck** is a pocket hardware password manager built on a Waveshare RP2040-Zero running CircuitPython. It acts as a USB keyboard: pick a profile with the buttons, press Enter, and it types the password. Features: 6 profiles with on-device generation (random EN/RU or memorable two-word passwords typed in either layout), Latin and Cyrillic passwords (automatic Windows layout switching via Ctrl+Shift+1/2), auto-Enter, Win+L lock, optional media remote (play/pause, tracks, volume), mouse jiggler, 11 sleep animations plus Mix, list menus, brightness settings, an offline browser-based password editor stored on the device itself, a diagnostic log, and all tunables in `settings.py`.
 
-Quick start: hold BOOT, plug in, drag the single `PassPuck-2.2.uf2` from Releases onto `RPI-RP2`. The device then opens its drive with `PassPuck Editor.html` for first-time setup. Run `windows/Настроить Windows.cmd` once per PC to set the language hotkeys. When updating an existing device, copy `device/` except `passwords.py` and `settings.py` (do not reflash the full image — it resets passwords). The program ships precompiled as `passpuck.mpy` (CircuitPython 10.x); the source is `src/passpuck.py`, rebuild with `tools/build.ps1`. The full manual (Russian) is in `docs/`.
+Quick start: hold BOOT, plug in, drag the single `PassPuck-2.3.uf2` from Releases onto `RPI-RP2`. The device then opens its drive with `PassPuck Editor.html` for first-time setup. Run `windows/Настроить Windows.cmd` once per PC to set the language hotkeys. When updating an existing device, copy `device/` except `passwords.py` and `settings.py` (do not reflash the full image — it resets passwords). The program ships precompiled as `passpuck.mpy` (CircuitPython 10.x); the source is `src/passpuck.py`, rebuild with `tools/build.ps1`. The full manual (Russian) is in `docs/`.
 
 Passwords are stored in plain text on the device flash. MIT licensed.

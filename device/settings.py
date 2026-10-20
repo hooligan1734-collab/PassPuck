@@ -41,6 +41,7 @@ LONG_PRESS_TIME = 1.0      # сколько держать «Ввод», что�
 NAV_LOCK_HOLD_TIME = 1.0   # сколько держать «Назад»+«Вперёд» для Win+L, сек
 NAV_REPEAT_DELAY = 0.5     # держите «Назад» или «Вперёд» дольше — листает само, сек
 NAV_REPEAT_INTERVAL = 0.25 # пауза между шагами при таком листании, сек
+MEDIA_VOLUME_INTERVAL = 0.1 # пульт MEDIA (SETTINGS -> Media: On): шаг громкости при удержании, сек
 BUTTON_DEBOUNCE = 0.03     # защита от дребезга, сек
 
 # ---------- Сон экрана (выбирается в SETTINGS → Sleep / Style) ----------

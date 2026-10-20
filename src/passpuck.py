@@ -38,11 +38,14 @@ from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.mouse import Mouse
 from adafruit_hid.keyboard_layout_us import KeyboardLayoutUS
 from adafruit_hid.keycode import Keycode
+from adafruit_hid.consumer_control import ConsumerControl
+from adafruit_hid.consumer_control_code import ConsumerControlCode
 from adafruit_display_text import label
 from adafruit_display_shapes.line import Line
 from adafruit_display_shapes.circle import Circle
 from adafruit_display_shapes.roundrect import RoundRect
 from adafruit_display_shapes.rect import Rect
+from adafruit_display_shapes.triangle import Triangle
 
 
 # =====================================================================
@@ -51,7 +54,7 @@ from adafruit_display_shapes.rect import Rect
 #  Если какой-то строки в settings.py нет — используется значение отсюда.
 # =====================================================================
 
-VERSION = "2.2"
+VERSION = "2.3"
 
 # Тип экрана. Оставьте раскомментированной ОДНУ строку:
 OLED_TYPE = "SH1106"      # экран 1.3"
@@ -111,6 +114,7 @@ LONG_PRESS_TIME = 1.0     # сколько держать «Ввод», чтоб
 NAV_LOCK_HOLD_TIME = 1.0  # сколько держать «Назад»+«Вперёд» для блокировки ПК (Win+L)
 NAV_REPEAT_DELAY = 0.5    # держите «Назад» или «Вперёд» дольше — листает само
 NAV_REPEAT_INTERVAL = 0.25  # ... с такой паузой между шагами, сек
+MEDIA_VOLUME_INTERVAL = 0.1 # пульт MEDIA: держите «Вперёд»/«Назад» — громкость меняется с таким шагом, сек
 
 # Jiggle: как часто шевелить мышь. Выбирается на устройстве: JIGGLE → долгий «Ввод» → Every.
 # Windows обычно засыпает после 5-10 минут бездействия, поэтому интервал должен быть меньше.
@@ -174,9 +178,10 @@ except ImportError:
 # --- ниже этой линии менять без необходимости не стоит ---
 
 TOTAL_PROFILES = 6
-JIGGLE_ITEM = TOTAL_PROFILES           # 7-й пункт главного экрана — JIGGLE
-SETTINGS_ITEM = TOTAL_PROFILES + 1     # 8-й пункт — SETTINGS
-MAIN_MENU_ITEMS = TOTAL_PROFILES + 2
+MEDIA_ITEM = TOTAL_PROFILES            # 7-й пункт главного экрана — MEDIA (пульт для музыки)
+JIGGLE_ITEM = TOTAL_PROFILES + 1       # 8-й — JIGGLE
+SETTINGS_ITEM = TOTAL_PROFILES + 2     # 9-й — SETTINGS
+MAIN_MENU_ITEMS = TOTAL_PROFILES + 3
 
 
 # =====================================================================
@@ -577,6 +582,7 @@ def words_hint(pw):
 #           (ставит пункт SETTINGS → Edit mode, стирает boot.py)
 #  Байт 39: первая настройка через редактор пропущена (SETTINGS → Exit edit mode
 #           на новом устройстве) — boot.py больше не открывает диск сам
+#  Байт 40: пульт MEDIA включён (SETTINGS → Media: On)
 #  Значение 1 = включено, всё остальное = выключено.
 # =====================================================================
 
@@ -597,6 +603,7 @@ NVM_EDIT_FLAG = 37        # если менять — поменяйте и в b
 EDIT_FLAG_VALUE = 0xA5
 NVM_LAYOUT_OFF = 38
 NVM_SETUP_SKIPPED = 39    # если менять — поменяйте и в boot.py
+NVM_MEDIA_ON = 40
 
 
 def nvm_prepare():
@@ -653,6 +660,15 @@ def load_layout_auto():
 
 def save_layout_auto(enabled):
     nvm[NVM_LAYOUT_OFF] = 0 if enabled else 1
+
+
+def load_media_enabled():
+    """Показывать ли пульт MEDIA (SETTINGS → Media). По умолчанию выключен."""
+    return nvm[NVM_MEDIA_ON] == 1
+
+
+def save_media_enabled(enabled):
+    nvm[NVM_MEDIA_ON] = 1 if enabled else 0
 
 
 def request_edit_mode():
@@ -790,6 +806,7 @@ MENU_ROWS = 4             # сколько строк меню видно сра
 MENU_ROW_W = 121          # ширина строки (справа — полоска прокрутки)
 MENU_THUMB = 10           # высота бегунка полоски прокрутки
 menu_memory = {}          # на каком пункте закрыли каждое меню (до выключения)
+media_icons = None        # значки пульта MEDIA
 jiggle_icon = None
 
 
@@ -903,7 +920,7 @@ def init_display():
     global display, splash, empty_splash, title_label, pass_label, bottom_label
     global icons_group, nav_dots, badge_enter, badge_ctrl, gen_badge, jiggle_icon
     global bottom_line, menu_group, menu_highlight, menu_names, menu_values
-    global menu_scroll, menu_scroll_track, menu_counter
+    global menu_scroll, menu_scroll_track, menu_counter, media_icons
 
     displayio.release_displays()
     try:
@@ -962,6 +979,23 @@ def init_display():
     menu_group.hidden = True
     splash.append(menu_group)
 
+    # Пульт MEDIA: значки «назад», «пауза/играть», «вперёд»
+    media_icons = displayio.Group()
+    for shape in (
+        Rect(14, 25, 2, 13, fill=0xFFFFFF),                                  # |◀◀
+        Triangle(26, 25, 17, 31, 26, 37, fill=0xFFFFFF, outline=0xFFFFFF),
+        Triangle(35, 25, 26, 31, 35, 37, fill=0xFFFFFF, outline=0xFFFFFF),
+        Triangle(51, 25, 51, 37, 60, 31, fill=0xFFFFFF, outline=0xFFFFFF),   # ▶||
+        Rect(65, 25, 3, 13, fill=0xFFFFFF),
+        Rect(71, 25, 3, 13, fill=0xFFFFFF),
+        Triangle(89, 25, 98, 31, 89, 37, fill=0xFFFFFF, outline=0xFFFFFF),   # ▶▶|
+        Triangle(98, 25, 107, 31, 98, 37, fill=0xFFFFFF, outline=0xFFFFFF),
+        Rect(108, 25, 2, 13, fill=0xFFFFFF),
+    ):
+        media_icons.append(shape)
+    media_icons.hidden = True
+    splash.append(media_icons)
+
     # Верхняя строка профиля: справа значки ENT (Auto Enter) и CTL (Ctrl first) —
     # видны, когда включены, — и вид пароля для Gen Pass (EN / RU / Words)
     def make_badge(text):
@@ -976,16 +1010,15 @@ def init_display():
     gen_badge = label.Label(terminalio.FONT, text="", color=0xFFFFFF, y=6)
     splash.append(gen_badge)
 
-    # Нижняя строка: точки «где я». Кружки — профили, квадраты — JIGGLE и SETTINGS.
-    # Закрашена текущая.
+    # Нижняя строка: точки «где я». Кружки — профили, квадраты — MEDIA, JIGGLE и SETTINGS.
+    # Закрашена текущая. Где стоять каждой точке, решает update_ui (MEDIA может быть скрыт).
     icons_group = displayio.Group()
     nav_dots = []
     for i in range(MAIN_MENU_ITEMS):
-        cx = 64 - (MAIN_MENU_ITEMS - 1) * 4 + i * 8
         if i < TOTAL_PROFILES:
-            dot = Circle(cx, 56, 2, fill=None, outline=0xFFFFFF)
+            dot = Circle(0, 56, 2, fill=None, outline=0xFFFFFF)
         else:
-            dot = Rect(cx - 2, 54, 5, 5, fill=None, outline=0xFFFFFF)
+            dot = Rect(-2, 54, 5, 5, fill=None, outline=0xFFFFFF)
         nav_dots.append(dot)
         icons_group.append(dot)
     splash.append(icons_group)
@@ -1089,17 +1122,22 @@ def show_message(title, text, bottom=None):
         set_bottom_mode(show_text=False)
 
 
-# --- Клавиатура и мышь для компьютера ---
+# --- Клавиатура, мышь и мультимедийные клавиши для компьютера ---
 kbd = None
 layout = None
 mouse = None
+media_keys = None         # пауза, треки, громкость (пульт MEDIA)
 
 
 def init_hid():
-    global kbd, layout, mouse
+    global kbd, layout, mouse, media_keys
     kbd = Keyboard(usb_hid.devices)
     layout = KeyboardLayoutUS(kbd)
     mouse = Mouse(usb_hid.devices)
+    try:
+        media_keys = ConsumerControl(usb_hid.devices)
+    except Exception as e:
+        log_exception("мультимедийные клавиши (пульт MEDIA не будет работать)", e)
 
 
 def caps_lock_on():
@@ -1141,7 +1179,10 @@ def send_keys(*keys):
 # =====================================================================
 
 current_profile = 1
-main_menu_index = 0       # 0-5 — профили, 6 — JIGGLE, 7 — SETTINGS
+main_menu_index = 0       # 0-5 — профили, 6 — MEDIA, 7 — JIGGLE, 8 — SETTINGS
+media_enabled = False     # SETTINGS → Media: есть ли экран MEDIA в карусели
+media_mode = False        # включён пульт MEDIA: кнопки управляют музыкой
+media_status_until = 0.0  # до какого времени внизу показано последнее действие пульта
 menu_index = 0            # пункт внутри меню
 sleep_preset = SLEEP_DEFAULT_PRESET
 sleep_style = 0           # 0 = Off (экран выключается)
@@ -1160,11 +1201,92 @@ is_sleeping = False
 
 
 def tick():
-    """Фоновые дела, пока ждём кнопку: светодиод, Jiggle и анимация сна."""
+    """Фоновые дела, пока ждём кнопку: светодиод, Jiggle, анимация сна и подсказка пульта."""
     update_led()
     update_mouse_jiggle()
     update_sleep_animation()
+    update_media_status()
     time.sleep(0.02)
+
+
+# --- Пульт MEDIA: кнопки управляют музыкой и видео на компьютере ---
+
+def enter_media_mode():
+    global media_mode
+    if media_keys is None:
+        set_centered_text(pass_label, "No media keys")
+        time.sleep(1.5)
+        update_ui()
+        return
+    media_mode = True
+    log("Пульт MEDIA включён.")
+    update_ui()
+
+
+def exit_media_mode():
+    global media_mode
+    media_mode = False
+    update_ui()
+
+
+def media_send(code, name):
+    """Отправить мультимедийную клавишу и на секунду показать внизу, что нажато."""
+    global media_status_until
+    try:
+        media_keys.send(code)
+    except Exception as e:
+        log_exception("пульт MEDIA", e)
+        name = "Media ERROR"
+    if not is_sleeping:
+        set_centered_text(bottom_label, name)
+        media_status_until = time.monotonic() + 1.0
+
+
+def update_media_status():
+    """Через секунду после действия внизу снова подсказка «hold Enter = exit»."""
+    global media_status_until
+    if media_status_until and time.monotonic() > media_status_until:
+        media_status_until = 0.0
+        if media_mode and not is_sleeping:
+            set_centered_text(bottom_label, "hold Enter = exit")
+
+
+def media_hold(btn, other, tap_code, tap_name, hold_code, hold_name):
+    """«Вперёд»/«Назад» в пульте: коротко — трек, держать — громкость, пока держите.
+    Нажали вторую кнопку — комбинация блокировки (Win+L), как везде."""
+    next_step = time.monotonic() + NAV_REPEAT_DELAY
+    held = False
+    while pressed(btn):
+        if pressed(other):
+            handle_lock_combo()
+            return
+        now = time.monotonic()
+        if now >= next_step:
+            media_send(hold_code, hold_name)
+            held = True
+            next_step = now + MEDIA_VOLUME_INTERVAL
+        tick()
+    if not held:
+        media_send(tap_code, tap_name)
+    time.sleep(BUTTON_DEBOUNCE)
+
+
+def media_press():
+    """Нажатие кнопки, пока включён пульт MEDIA."""
+    if pressed(btn_back) and pressed(btn_fwd):
+        handle_lock_combo()
+    elif pressed(btn_enter):
+        if wait_enter() == "long":
+            exit_media_mode()               # держать «Ввод» — выйти из пульта
+        else:
+            media_send(ConsumerControlCode.PLAY_PAUSE, "Play / Pause")
+        wait_all_released()
+    elif pressed(btn_fwd):
+        media_hold(btn_fwd, btn_back, ConsumerControlCode.SCAN_NEXT_TRACK, "Next >>",
+                   ConsumerControlCode.VOLUME_INCREMENT, "Volume +")
+    elif pressed(btn_back):
+        media_hold(btn_back, btn_fwd, ConsumerControlCode.SCAN_PREVIOUS_TRACK, "<< Prev",
+                   ConsumerControlCode.VOLUME_DECREMENT, "Volume -")
 
 
 def wait_all_released():
@@ -1420,6 +1542,7 @@ def update_ui():
     """Перерисовывает главный экран или меню по текущему состоянию."""
     set_bottom_mode(show_text=False)
     hide_badges()
+    media_icons.hidden = True
     on_jiggle = main_menu_index == JIGGLE_ITEM
     on_settings = main_menu_index == SETTINGS_ITEM
     jiggle_icon.hidden = in_menu or not mouse_jiggle_enabled
@@ -1427,9 +1550,25 @@ def update_ui():
     if not in_menu:
         set_menu_view(False)
         icons_group.hidden = False
+        # Точки по центру, через 8 пикселей; точки MEDIA нет, если пульт выключен
+        shown = [i for i in range(MAIN_MENU_ITEMS) if i != MEDIA_ITEM or media_enabled]
+        left = 64 - (len(shown) - 1) * 4
         for i, dot in enumerate(nav_dots):
+            dot.hidden = i not in shown
+            if i in shown:
+                dot.x = left + shown.index(i) * 8 - 2
             dot.fill = 0xFFFFFF if i == main_menu_index else None
-        if on_jiggle:
+        if main_menu_index == MEDIA_ITEM:
+            set_centered_text(title_label, "=== MEDIA ===")
+            if media_mode:
+                # Пульт включён: значки в центре, внизу — подсказка или последнее действие
+                pass_label.text = ""
+                media_icons.hidden = False
+                set_bottom_mode(show_text=True)
+                set_centered_text(bottom_label, "hold Enter = exit")
+            else:
+                set_centered_text(pass_label, "Enter = remote")
+        elif on_jiggle:
             set_centered_text(title_label, "=== JIGGLE ===")
             set_centered_text(pass_label, "Jiggle {} | {}".format(
                 "ON" if mouse_jiggle_enabled else "OFF",
@@ -1483,6 +1622,7 @@ def update_ui():
                 ("Screen", SCREEN_BRIGHTNESS[screen_brightness][0]),
                 ("LED", LED_BRIGHTNESS[led_brightness][0]),
                 ("Layout", "Auto" if layout_auto else "Off"),
+                ("Media", "On" if media_enabled else "Off"),
                 ("Edit mode" if FS_WRITABLE else "Exit edit mode", ""),
                 exit_item,
             ]
@@ -1533,8 +1673,9 @@ def go_to_sleep(preview=False):
         remember_profile()
         in_menu = False
         menu_index = 0
-        main_menu_index = current_profile - 1
-        update_ui()                 # после пробуждения будет главный экран
+        if not media_mode:              # пульт MEDIA сон не выключает
+            main_menu_index = current_profile - 1
+        update_ui()                 # после пробуждения будет главный экран (или пульт)
     if sleep_style == 0:
         display.root_group = empty_splash
         try:
@@ -2198,13 +2339,15 @@ def navigate(step):
         if main_menu_index == JIGGLE_ITEM:
             count = 2
         elif main_menu_index == SETTINGS_ITEM:
-            count = 8
+            count = 9
         else:
             count = 6
         menu_index = (menu_index + step) % count
         menu_memory[menu_key()] = menu_index
     else:
         main_menu_index = (main_menu_index + step) % MAIN_MENU_ITEMS
+        if main_menu_index == MEDIA_ITEM and not media_enabled:
+            main_menu_index = (main_menu_index + step) % MAIN_MENU_ITEMS   # пульт выключен — пропускаем
         if main_menu_index < TOTAL_PROFILES:
             current_profile = main_menu_index + 1
             auto_enter_enabled = load_auto_enter(current_profile)
@@ -2218,12 +2361,15 @@ def on_enter(press):
     global in_menu, menu_index, mouse_jiggle_enabled
     global jiggle_preset
     global auto_enter_enabled, ctrl_first_enabled, sleep_preset, sleep_style
-    global screen_brightness, led_brightness, gen_mode, layout_auto
+    global screen_brightness, led_brightness, gen_mode, layout_auto, media_enabled
     on_jiggle = main_menu_index == JIGGLE_ITEM
     on_settings = main_menu_index == SETTINGS_ITEM
 
     # ---------- главный экран ----------
     if not in_menu:
+        if main_menu_index == MEDIA_ITEM:           # MEDIA: любое нажатие включает пульт
+            enter_media_mode()
+            return
         if press == "long" or on_settings:          # SETTINGS открывается любым нажатием
             in_menu = True
             menu_index = menu_memory.get(menu_key(), 0)   # там, где закрыли в прошлый раз
@@ -2255,9 +2401,9 @@ def on_enter(press):
         update_led()
         return
 
-    # ---------- меню SETTINGS: Sleep / Style / Preview / Screen / LED / Layout / Edit / Exit ----------
+    # ---------- меню SETTINGS: Sleep / Style / Preview / Screen / LED / Layout / Media / Edit / Exit ----------
     if on_settings:
-        if press == "long" or menu_index == 7:
+        if press == "long" or menu_index == 8:
             in_menu = False
         elif menu_index == 0:
             sleep_preset = (sleep_preset + 1) % len(SLEEP_PRESETS)
@@ -2285,6 +2431,10 @@ def on_enter(press):
             save_layout_auto(layout_auto)
             log("Раскладка: " + ("Auto" if layout_auto else "Off"))
         elif menu_index == 6:
+            media_enabled = not media_enabled       # показать / убрать экран MEDIA
+            save_media_enabled(media_enabled)
+            log("Пульт MEDIA: " + ("On" if media_enabled else "Off"))
+        elif menu_index == 7:
             edit_mode_flow()                        # Edit mode / Exit edit mode
         update_ui()
         update_led()
@@ -2346,14 +2496,18 @@ def main_loop():
             check_sleep()
             continue
 
-        # Экран погас: первое нажатие только будит его
-        if is_sleeping:
+        # Экран погас: первое нажатие только будит его.
+        # Кроме пульта MEDIA: там нажатие сразу выполняет действие (пауза, трек) —
+        # это безопасно, пароль так не напечатается.
+        if is_sleeping and not media_mode:
             wake_up()
             wait_all_released()
             continue
         wake_up()
 
-        if pressed(btn_back) and pressed(btn_fwd):
+        if media_mode:
+            media_press()
+        elif pressed(btn_back) and pressed(btn_fwd):
             handle_lock_combo()
         elif pressed(btn_fwd):
             nav_press(btn_fwd, btn_back, +1)
@@ -2373,7 +2527,7 @@ def startup():
     global boot_number, auto_enter_enabled, ctrl_first_enabled, sleep_preset, sleep_style
     global mouse_jiggle_enabled
     global jiggle_preset, last_activity_time, screen_brightness, led_brightness
-    global gen_mode, layout_auto, current_profile, main_menu_index
+    global gen_mode, layout_auto, current_profile, main_menu_index, media_enabled
 
     nvm_prepare()
     boot_number = nvm_next_boot_number()
@@ -2388,6 +2542,7 @@ def startup():
     init_display()
     screen_brightness, led_brightness = load_brightness()
     layout_auto = load_layout_auto()
+    media_enabled = load_media_enabled()
     apply_brightness()
     show_splash()
     init_hid()
