@@ -54,7 +54,7 @@ from adafruit_display_shapes.triangle import Triangle
 #  Если какой-то строки в settings.py нет — используется значение отсюда.
 # =====================================================================
 
-VERSION = "2.3"
+VERSION = "2.4"
 
 # Тип экрана. Оставьте раскомментированной ОДНУ строку:
 OLED_TYPE = "SH1106"      # экран 1.3"
@@ -179,9 +179,11 @@ except ImportError:
 
 TOTAL_PROFILES = 6
 MEDIA_ITEM = TOTAL_PROFILES            # 7-й пункт главного экрана — MEDIA (пульт для музыки)
-JIGGLE_ITEM = TOTAL_PROFILES + 1       # 8-й — JIGGLE
-SETTINGS_ITEM = TOTAL_PROFILES + 2     # 9-й — SETTINGS
-MAIN_MENU_ITEMS = TOTAL_PROFILES + 3
+GAME_ITEM = TOTAL_PROFILES + 1         # 8-й — GAME (игры)
+JIGGLE_ITEM = TOTAL_PROFILES + 2       # 9-й — JIGGLE
+SETTINGS_ITEM = TOTAL_PROFILES + 3     # 10-й — SETTINGS
+MAIN_MENU_ITEMS = TOTAL_PROFILES + 4
+# MEDIA и GAME показываются, только если включены в SETTINGS (см. item_shown)
 
 
 # =====================================================================
@@ -583,6 +585,8 @@ def words_hint(pw):
 #  Байт 39: первая настройка через редактор пропущена (SETTINGS → Exit edit mode
 #           на новом устройстве) — boot.py больше не открывает диск сам
 #  Байт 40: пульт MEDIA включён (SETTINGS → Media: On)
+#  Байты 41-42: рекорд в игре «Змейка», 43: её скорость, 44: проходные стены (1)
+#  Байт 45: экран игр GAME включён (SETTINGS → Game: On)
 #  Значение 1 = включено, всё остальное = выключено.
 # =====================================================================
 
@@ -604,6 +608,10 @@ EDIT_FLAG_VALUE = 0xA5
 NVM_LAYOUT_OFF = 38
 NVM_SETUP_SKIPPED = 39    # если менять — поменяйте и в boot.py
 NVM_MEDIA_ON = 40
+NVM_SNAKE_BEST = 41       # 2 байта
+NVM_SNAKE_SPEED = 43
+NVM_SNAKE_WRAP = 44
+NVM_GAME_ON = 45
 
 
 def nvm_prepare():
@@ -669,6 +677,15 @@ def load_media_enabled():
 
 def save_media_enabled(enabled):
     nvm[NVM_MEDIA_ON] = 1 if enabled else 0
+
+
+def load_game_enabled():
+    """Показывать ли экран игр GAME (SETTINGS → Game). По умолчанию выключен."""
+    return nvm[NVM_GAME_ON] == 1
+
+
+def save_game_enabled(enabled):
+    nvm[NVM_GAME_ON] = 1 if enabled else 0
 
 
 def request_edit_mode():
@@ -1181,6 +1198,7 @@ def send_keys(*keys):
 current_profile = 1
 main_menu_index = 0       # 0-5 — профили, 6 — MEDIA, 7 — JIGGLE, 8 — SETTINGS
 media_enabled = False     # SETTINGS → Media: есть ли экран MEDIA в карусели
+game_enabled = False      # SETTINGS → Game: есть ли экран GAME в карусели
 media_mode = False        # включён пульт MEDIA: кнопки управляют музыкой
 media_status_until = 0.0  # до какого времени внизу показано последнее действие пульта
 menu_index = 0            # пункт внутри меню
@@ -1550,8 +1568,8 @@ def update_ui():
     if not in_menu:
         set_menu_view(False)
         icons_group.hidden = False
-        # Точки по центру, через 8 пикселей; точки MEDIA нет, если пульт выключен
-        shown = [i for i in range(MAIN_MENU_ITEMS) if i != MEDIA_ITEM or media_enabled]
+        # Точки по центру, через 8 пикселей; точек MEDIA и GAME нет, если они выключены
+        shown = [i for i in range(MAIN_MENU_ITEMS) if item_shown(i)]
         left = 64 - (len(shown) - 1) * 4
         for i, dot in enumerate(nav_dots):
             dot.hidden = i not in shown
@@ -1568,6 +1586,9 @@ def update_ui():
                 set_centered_text(bottom_label, "hold Enter = exit")
             else:
                 set_centered_text(pass_label, "Enter = remote")
+        elif main_menu_index == GAME_ITEM:
+            set_centered_text(title_label, "=== GAME ===")
+            set_centered_text(pass_label, "Snake")
         elif on_jiggle:
             set_centered_text(title_label, "=== JIGGLE ===")
             set_centered_text(pass_label, "Jiggle {} | {}".format(
@@ -1607,7 +1628,13 @@ def update_ui():
         icons_group.hidden = True
         # Пункт Exit напоминает, что выйти можно и долгим нажатием «Ввод»
         exit_item = ("Exit", "hold Enter")
-        if on_jiggle:
+        if main_menu_index == GAME_ITEM:
+            title = "GAME"
+            items = [
+                ("Snake", "best {}".format(load_snake_settings()[0])),
+                exit_item,
+            ]
+        elif on_jiggle:
             title = "JIGGLE"
             items = [
                 ("Every", seconds_label(JIGGLE_PRESETS[jiggle_preset])),
@@ -1623,6 +1650,7 @@ def update_ui():
                 ("LED", LED_BRIGHTNESS[led_brightness][0]),
                 ("Layout", "Auto" if layout_auto else "Off"),
                 ("Media", "On" if media_enabled else "Off"),
+                ("Game", "On" if game_enabled else "Off"),
                 ("Edit mode" if FS_WRITABLE else "Exit edit mode", ""),
                 exit_item,
             ]
@@ -1977,6 +2005,268 @@ def update_snake(now):
         snake_cell(new[0], new[1], 1)                 # потом рисуем голову
 
 
+# =====================================================================
+#  ИГРА «ЗМЕЙКА» (SETTINGS → Snake). Рисуется на той же картинке, что анимации сна.
+#  «Назад» — повернуть налево, «Вперёд» — направо (относительно движения головы),
+#  «Ввод» — пауза, держать «Ввод» — выйти. Рекорд хранится в памяти настроек.
+# =====================================================================
+SNAKE_SPEEDS = (("Easy", 0.22), ("Normal", 0.15), ("Hard", 0.09))  # пауза между шагами, сек
+# Сверху полоска со счётом, ниже — поле в рамке: сплошной, если стены убивают,
+# пунктирной, если сквозь края можно проходить (Wrap)
+GAME_X0 = 2               # левый верхний угол поля (внутри рамки)
+GAME_Y0 = 13
+GAME_W = 31               # поле 31×12 клеток по 4 пикселя
+GAME_H = 12
+game_score_label = None
+game_best_label = None
+game_msg_label = None
+
+
+def game_labels():
+    """Надписи игры создаются один раз, при первом запуске."""
+    global game_score_label, game_best_label, game_msg_label
+    if game_score_label is None:
+        game_score_label = label.Label(terminalio.FONT, text="", color=0xFFFFFF, x=1, y=5)
+        game_best_label = label.Label(terminalio.FONT, text="", color=0xFFFFFF, y=5)
+        game_msg_label = label.Label(terminalio.FONT, text="", color=0xFFFFFF, y=32, line_spacing=1.0)
+        for l in (game_score_label, game_best_label, game_msg_label):
+            anim_group.append(l)
+    return game_score_label, game_best_label, game_msg_label
+
+
+def game_show_labels(visible):
+    if game_score_label is not None:
+        for l in (game_score_label, game_best_label, game_msg_label):
+            l.hidden = not visible
+
+
+def load_snake_settings():
+    best = (nvm[NVM_SNAKE_BEST] << 8) | nvm[NVM_SNAKE_BEST + 1]
+    speed = nvm[NVM_SNAKE_SPEED]
+    return (best if best <= 9999 else 0,
+            speed if speed < len(SNAKE_SPEEDS) else 1,
+            nvm[NVM_SNAKE_WRAP] == 1)
+
+
+def save_snake_setting(index, value):
+    if nvm[index] != value:               # пишем, только если изменилось
+        nvm[index] = value
+
+
+def save_snake_best(best):
+    nvm[NVM_SNAKE_BEST:NVM_SNAKE_BEST + 2] = bytes([best >> 8, best & 0xFF])
+
+
+def game_frame(wrap):
+    """Рамка поля: сплошная — стены, пунктир — края проходные."""
+    left, top, right, bottom = 0, GAME_Y0 - 2, ANIM_W - 1, GAME_Y0 + GAME_H * 4 + 1
+    if not wrap:
+        draw_line(left, top, right, top, 1)
+        draw_line(left, bottom, right, bottom, 1)
+        draw_line(left, top, left, bottom, 1)
+        draw_line(right, top, right, bottom, 1)
+        return
+    for x in range(left, right + 1, 3):
+        set_px(x, top, 1)
+        set_px(x, bottom, 1)
+    for y in range(top, bottom + 1, 3):
+        set_px(left, y, 1)
+        set_px(right, y, 1)
+
+
+def game_cell(c, value, food=False):
+    x = GAME_X0 + c[0] * 4
+    y = GAME_Y0 + c[1] * 4
+    if food:
+        fill_rect(x + 1, y + 1, x + 3, y + 3, value)    # еда — точка поменьше
+    else:
+        fill_rect(x, y, x + 3, y + 3, value)
+
+
+def game_message(text):
+    """Табличка поверх поля (пауза, конец игры). Пустой текст — убрать."""
+    if text:
+        lines = text.split("\n")
+        top = 32 - len(lines) * 6 - 3       # строки по 12 пикселей, рамка вокруг
+        bottom = 32 + len(lines) * 6 + 2
+        fill_rect(10, top, 118, bottom + 1, 0)
+        draw_line(10, top, 117, top, 1)
+        draw_line(10, bottom, 117, bottom, 1)
+        draw_line(10, top, 10, bottom, 1)
+        draw_line(117, top, 117, bottom, 1)
+        width = max(len(line) for line in lines)
+        game_msg_label.x = (128 - width * 6) // 2
+        game_msg_label.y = top + 9
+    game_msg_label.text = text
+
+
+def snake_wait_button():
+    """Ждём кнопку: "back", "fwd", "short" / "long" («Ввод»). Блокировка ПК — как везде."""
+    while True:
+        tick()
+        if pressed(btn_back) and pressed(btn_fwd):
+            handle_lock_combo()
+            continue
+        for btn, name in ((btn_back, "back"), (btn_fwd, "fwd")):
+            if pressed(btn):
+                while pressed(btn):
+                    if pressed(btn_back) and pressed(btn_fwd):
+                        handle_lock_combo()
+                        break
+                    tick()
+                return name
+        if pressed(btn_enter):
+            press = wait_enter()
+            wait_all_released()
+            return press
+
+
+def snake_round(speed, wrap, best):
+    """Одна игра. Возвращает (счёт, хочет_ли_игрок_ещё)."""
+    score_l, best_l, _ = game_labels()
+    anim_logo.hidden = True
+    game_show_labels(True)
+    game_message("")
+    anim_bitmap.fill(0)
+    game_frame(wrap)
+    best_l.text = "Best {}".format(best)
+    best_l.x = 127 - len(best_l.text) * 6
+    body = [(10, 6), (9, 6), (8, 6)]        # голова первая
+    direction = (1, 0)
+    turns = []                              # нажатые повороты, по одному на шаг
+    score = 0
+    interval = SNAKE_SPEEDS[speed][1]
+
+    def new_food():
+        while True:
+            f = (random.randrange(GAME_W), random.randrange(GAME_H))
+            if f not in body:
+                game_cell(f, 1, food=True)
+                return f
+
+    for c in body:
+        game_cell(c, 1)
+    food = new_food()
+    score_l.text = "0"
+    next_step = time.monotonic() + interval
+    prev = {"back": False, "fwd": False}
+    paused = False
+    while True:
+        update_led()
+        update_mouse_jiggle()
+        now = time.monotonic()
+        back, fwd = pressed(btn_back), pressed(btn_fwd)
+        if back and fwd:
+            handle_lock_combo()             # блокировка ПК — игра встаёт на паузу
+            paused = True
+            game_message("PAUSE\nEnter = go")
+            prev = {"back": True, "fwd": True}
+            continue
+        if pressed(btn_enter):
+            press = wait_enter()
+            wait_all_released()
+            if press == "long":
+                return score, False         # держать «Ввод» — выйти
+            paused = not paused
+            game_message("PAUSE\nEnter = go" if paused else "")
+            if not paused:
+                # Табличка закрыла часть поля — стираем поле и рисуем всё заново
+                fill_rect(1, GAME_Y0 - 1, ANIM_W - 1, GAME_Y0 + GAME_H * 4 + 1, 0)
+                game_frame(wrap)
+                for c in body:
+                    game_cell(c, 1)
+                game_cell(food, 1, food=True)
+                next_step = time.monotonic() + interval
+            continue
+        if not paused:
+            # Поворот — в момент нажатия: относительно последнего направления в очереди
+            for name, is_down, left in (("back", back, True), ("fwd", fwd, False)):
+                if is_down and not prev[name] and len(turns) < 2:
+                    dx, dy = turns[-1] if turns else direction
+                    turns.append((dy, -dx) if left else (-dy, dx))
+            if now >= next_step:
+                next_step = now + interval
+                if turns:
+                    direction = turns.pop(0)
+                hx, hy = body[0]
+                nx, ny = hx + direction[0], hy + direction[1]
+                if wrap:
+                    nx %= GAME_W
+                    ny %= GAME_H
+                grow = (nx, ny) == food
+                hit_wall = not (0 <= nx < GAME_W and 0 <= ny < GAME_H)
+                hit_self = (nx, ny) in (body if grow else body[:-1])
+                if hit_wall or hit_self:
+                    return score, snake_game_over(score, best)
+                body.insert(0, (nx, ny))
+                if grow:
+                    score += 1
+                    score_l.text = str(score)
+                    interval = max(0.05, interval * 0.97)   # чуть быстрее с каждой едой
+                    game_cell((nx, ny), 1)
+                    food = new_food()
+                else:
+                    game_cell(body.pop(), 0)                # сначала стираем хвост,
+                    game_cell((nx, ny), 1)                  # потом рисуем голову
+        prev = {"back": back, "fwd": fwd}
+        time.sleep(0.005)
+
+
+def snake_game_over(score, best):
+    """Конец игры. True — сыграть ещё, False — выйти."""
+    pixel[0] = (255, 0, 0)
+    record = score > best
+    game_message("GAME OVER\nScore {}{}\nEnter=again".format(score, " NEW!" if record else ""))
+    time.sleep(0.6)                         # чтобы случайное нажатие не начало игру сразу
+    wait_all_released()
+    while True:
+        b = snake_wait_button()
+        if b in ("short", "long"):
+            return b == "short"
+
+
+def snake_game():
+    """SETTINGS → Snake: выбор скорости и стен, затем игра."""
+    global menu_index, in_menu
+    saved_index = menu_index
+    best, speed, wrap = load_snake_settings()
+    option = 2                              # курсор сразу на Start
+    while True:
+        menu_index = option
+        draw_menu("SNAKE", [
+            ("Speed", SNAKE_SPEEDS[speed][0]),
+            ("Walls", "Wrap" if wrap else "Solid"),
+            ("Start", "best {}".format(best)),
+            ("Exit", "hold Enter"),
+        ])
+        b = snake_wait_button()
+        if b == "long" or (b == "short" and option == 3):
+            break
+        if b in ("back", "fwd"):
+            option = (option + (1 if b == "fwd" else -1)) % 4
+        elif option == 0:
+            speed = (speed + 1) % len(SNAKE_SPEEDS)
+            save_snake_setting(NVM_SNAKE_SPEED, speed)
+        elif option == 1:
+            wrap = not wrap
+            save_snake_setting(NVM_SNAKE_WRAP, 1 if wrap else 0)
+        elif option == 2:
+            in_menu = False                 # в игре работает Jiggle, светодиод синий
+            display.root_group = anim_group
+            again = True
+            while again:
+                score, again = snake_round(speed, wrap, best)
+                if score > best:
+                    best = score
+                    save_snake_best(best)
+                    log("Змейка: новый рекорд {}.".format(best))
+            game_show_labels(False)
+            display.root_group = splash
+            in_menu = True
+    menu_index = saved_index
+    wake_up()                               # отсчёт до сна — с этого момента
+
+
 # ---------- Матрица: колонки бегущих символов ----------
 MATRIX_GLYPHS = (0b111101101101111, 0b010110010010111, 0b111001111100111, 0b111001011001111,
                  0b101101111001001, 0b111100111001111, 0b110001010100011, 0b101010101010101,
@@ -2326,6 +2616,15 @@ def wait_enter():
     return "short"
 
 
+def item_shown(i):
+    """Есть ли экран i в карусели: MEDIA и GAME — только если включены в SETTINGS."""
+    if i == MEDIA_ITEM:
+        return media_enabled
+    if i == GAME_ITEM:
+        return game_enabled
+    return True
+
+
 def menu_key():
     """Какое меню открыто: у профилей одно общее, у JIGGLE и SETTINGS — свои."""
     return main_menu_index if main_menu_index >= TOTAL_PROFILES else "profile"
@@ -2336,18 +2635,18 @@ def navigate(step):
     global main_menu_index, menu_index, current_profile, auto_enter_enabled
     global ctrl_first_enabled, gen_mode
     if in_menu:
-        if main_menu_index == JIGGLE_ITEM:
+        if main_menu_index in (JIGGLE_ITEM, GAME_ITEM):
             count = 2
         elif main_menu_index == SETTINGS_ITEM:
-            count = 9
+            count = 10
         else:
             count = 6
         menu_index = (menu_index + step) % count
         menu_memory[menu_key()] = menu_index
     else:
         main_menu_index = (main_menu_index + step) % MAIN_MENU_ITEMS
-        if main_menu_index == MEDIA_ITEM and not media_enabled:
-            main_menu_index = (main_menu_index + step) % MAIN_MENU_ITEMS   # пульт выключен — пропускаем
+        while not item_shown(main_menu_index):          # выключенные MEDIA/GAME пропускаем
+            main_menu_index = (main_menu_index + step) % MAIN_MENU_ITEMS
         if main_menu_index < TOTAL_PROFILES:
             current_profile = main_menu_index + 1
             auto_enter_enabled = load_auto_enter(current_profile)
@@ -2361,7 +2660,7 @@ def on_enter(press):
     global in_menu, menu_index, mouse_jiggle_enabled
     global jiggle_preset
     global auto_enter_enabled, ctrl_first_enabled, sleep_preset, sleep_style
-    global screen_brightness, led_brightness, gen_mode, layout_auto, media_enabled
+    global screen_brightness, led_brightness, gen_mode, layout_auto, media_enabled, game_enabled
     on_jiggle = main_menu_index == JIGGLE_ITEM
     on_settings = main_menu_index == SETTINGS_ITEM
 
@@ -2370,7 +2669,7 @@ def on_enter(press):
         if main_menu_index == MEDIA_ITEM:           # MEDIA: любое нажатие включает пульт
             enter_media_mode()
             return
-        if press == "long" or on_settings:          # SETTINGS открывается любым нажатием
+        if press == "long" or on_settings or main_menu_index == GAME_ITEM:   # SETTINGS и GAME — любым нажатием
             in_menu = True
             menu_index = menu_memory.get(menu_key(), 0)   # там, где закрыли в прошлый раз
             update_ui()
@@ -2401,9 +2700,19 @@ def on_enter(press):
         update_led()
         return
 
-    # ---------- меню SETTINGS: Sleep / Style / Preview / Screen / LED / Layout / Media / Edit / Exit ----------
+    # ---------- меню GAME: Snake / Exit ----------
+    if main_menu_index == GAME_ITEM:
+        if press == "long" or menu_index == 1:
+            in_menu = False
+        else:
+            snake_game()                            # выбор скорости и стен, потом игра
+        update_ui()
+        update_led()
+        return
+
+    # ---------- меню SETTINGS: Sleep / Style / Preview / Screen / LED / Layout / Media / Game / Edit / Exit ----------
     if on_settings:
-        if press == "long" or menu_index == 8:
+        if press == "long" or menu_index == 9:
             in_menu = False
         elif menu_index == 0:
             sleep_preset = (sleep_preset + 1) % len(SLEEP_PRESETS)
@@ -2435,6 +2744,10 @@ def on_enter(press):
             save_media_enabled(media_enabled)
             log("Пульт MEDIA: " + ("On" if media_enabled else "Off"))
         elif menu_index == 7:
+            game_enabled = not game_enabled         # показать / убрать экран GAME
+            save_game_enabled(game_enabled)
+            log("Экран игр GAME: " + ("On" if game_enabled else "Off"))
+        elif menu_index == 8:
             edit_mode_flow()                        # Edit mode / Exit edit mode
         update_ui()
         update_led()
@@ -2527,7 +2840,7 @@ def startup():
     global boot_number, auto_enter_enabled, ctrl_first_enabled, sleep_preset, sleep_style
     global mouse_jiggle_enabled
     global jiggle_preset, last_activity_time, screen_brightness, led_brightness
-    global gen_mode, layout_auto, current_profile, main_menu_index, media_enabled
+    global gen_mode, layout_auto, current_profile, main_menu_index, media_enabled, game_enabled
 
     nvm_prepare()
     boot_number = nvm_next_boot_number()
@@ -2543,6 +2856,7 @@ def startup():
     screen_brightness, led_brightness = load_brightness()
     layout_auto = load_layout_auto()
     media_enabled = load_media_enabled()
+    game_enabled = load_game_enabled()
     apply_brightness()
     show_splash()
     init_hid()
